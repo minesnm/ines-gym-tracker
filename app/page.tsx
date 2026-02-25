@@ -2,6 +2,18 @@
 
 import React, { useState, useEffect } from "react";
 
+// 1. We define exactly what a Workout looks like so Vercel is happy
+interface Workout {
+  id: string;
+  exercise: string;
+  category: "upper" | "lower" | "core";
+  equipment: "free" | "machine" | "bodyweight";
+  weight: number;
+  sets: number;
+  reps: number;
+  date: string;
+}
+
 export default function GymTracker() {
   const [exercise, setExercise] = useState("");
   const [category, setCategory] = useState<"upper" | "lower" | "core">("lower");
@@ -13,10 +25,10 @@ export default function GymTracker() {
   const [sets, setSets] = useState<number | "">(3);
   const [reps, setReps] = useState<number | "">(10);
 
-  const [history, setHistory] = useState<any[]>([]);
-  const [lastRecord, setLastRecord] = useState<any | null>(null);
+  const [history, setHistory] = useState<Workout[]>([]); // Using the Workout type here
+  const [lastRecord, setLastRecord] = useState<Workout | null>(null);
   const [successMode, setSuccessMode] = useState(false);
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<{date: string, maxWeight: number}[]>([]);
 
   const [isSaved, setIsSaved] = useState(false);
 
@@ -114,13 +126,13 @@ export default function GymTracker() {
         setSuccessMode(false);
       }
 
-      const dailyMaxMap = new Map();
+      const dailyMaxMap = new Map<string, number>();
       [...matches].reverse().forEach((entry) => {
         const dateObj = new Date(entry.date);
         const dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
         if (
           !dailyMaxMap.has(dateStr) ||
-          dailyMaxMap.get(dateStr) < entry.weight
+          (dailyMaxMap.get(dateStr) || 0) < entry.weight
         ) {
           dailyMaxMap.set(dateStr, entry.weight);
         }
@@ -172,7 +184,6 @@ export default function GymTracker() {
     setExercise(exName);
     setCategory(cat);
 
-    // --- NEW: Smoothly scroll the user back to the top of the screen ---
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -219,7 +230,7 @@ export default function GymTracker() {
     if (!exercise) return;
     triggerHaptic([100, 50, 100]);
 
-    const newEntry = {
+    const newEntry: Workout = {
       id: crypto.randomUUID(),
       exercise: exercise.trim(),
       category: category,
@@ -250,7 +261,7 @@ export default function GymTracker() {
     const ONE_DAY = 86400000;
     const now = Date.now();
 
-    const fakeData = [
+    const fakeData: Workout[] = [
       {
         id: crypto.randomUUID(),
         exercise: "Goblet Squat",
@@ -583,8 +594,9 @@ export default function GymTracker() {
           groupedExercises.lower.length > 0 ||
           groupedExercises.core.length > 0) && (
           <div className="pt-8 border-t border-gray-100 space-y-6">
+            {/* FIXED: Apostrophe escaped for Vercel */}
             <h2 className="text-xs uppercase tracking-widest text-gray-400 text-center">
-              Today's Plan & History
+              Today&apos;s Plan & History
             </h2>
 
             {groupedExercises.lower.length > 0 && (
@@ -599,8 +611,8 @@ export default function GymTracker() {
                       onClick={() => handleSelectPastExercise(ex, "lower")}
                       className={`px-4 py-2 text-sm font-medium rounded-full transition-colors flex items-center space-x-1.5 ${
                         exercisesToday.has(ex)
-                          ? "bg-[#A9C2A3]/15 text-[#6B8565] hover:bg-[#A9C2A3]/30"
-                          : "bg-[#A9C2A3] text-white shadow-sm hover:bg-[#98b392]"
+                          ? "bg-[#A9C2A3]/15 text-[#6B8565] hover:bg-[#A9C2A3]/30" 
+                          : "bg-[#A9C2A3] text-white shadow-sm hover:bg-[#98b392]" 
                       }`}
                     >
                       <span>{getEquipmentIcon(equipmentMap.get(ex))}</span>
@@ -623,8 +635,8 @@ export default function GymTracker() {
                       onClick={() => handleSelectPastExercise(ex, "upper")}
                       className={`px-4 py-2 text-sm font-medium rounded-full transition-colors flex items-center space-x-1.5 ${
                         exercisesToday.has(ex)
-                          ? "bg-[#A9C2A3]/15 text-[#6B8565] hover:bg-[#A9C2A3]/30"
-                          : "bg-[#A9C2A3] text-white shadow-sm hover:bg-[#98b392]"
+                          ? "bg-[#A9C2A3]/15 text-[#6B8565] hover:bg-[#A9C2A3]/30" 
+                          : "bg-[#A9C2A3] text-white shadow-sm hover:bg-[#98b392]" 
                       }`}
                     >
                       <span>{getEquipmentIcon(equipmentMap.get(ex))}</span>
@@ -647,8 +659,8 @@ export default function GymTracker() {
                       onClick={() => handleSelectPastExercise(ex, "core")}
                       className={`px-4 py-2 text-sm font-medium rounded-full transition-colors flex items-center space-x-1.5 ${
                         exercisesToday.has(ex)
-                          ? "bg-[#A9C2A3]/15 text-[#6B8565] hover:bg-[#A9C2A3]/30"
-                          : "bg-[#A9C2A3] text-white shadow-sm hover:bg-[#98b392]"
+                          ? "bg-[#A9C2A3]/15 text-[#6B8565] hover:bg-[#A9C2A3]/30" 
+                          : "bg-[#A9C2A3] text-white shadow-sm hover:bg-[#98b392]" 
                       }`}
                     >
                       <span>{getEquipmentIcon(equipmentMap.get(ex))}</span>
