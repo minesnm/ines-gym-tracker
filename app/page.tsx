@@ -223,7 +223,7 @@ export default function GymTracker() {
   const getEquipmentLabel = (eq: string) => {
     if (eq === "machine") return "Machine";
     if (eq === "bodyweight") return "Body";
-    return "Wwights";
+    return "Weights";
   };
 
   const handleSave = () => {
