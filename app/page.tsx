@@ -409,7 +409,7 @@ export default function GymTracker() {
             {todayStr}
           </h1>
           <p className="text-sm text-gray-400">
-            Log your progress, beautifully.
+            Log your workout, track your progress.
           </p>
         </div>
 
