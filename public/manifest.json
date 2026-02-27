@@ -1,0 +1,16 @@
+{
+  "short_name": "GymTracker",
+  "name": "Boutique Gym Tracker",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#E8B4B8",
+  "background_color": "#FFFFFF"
+}
