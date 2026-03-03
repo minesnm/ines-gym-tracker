@@ -94,6 +94,7 @@ export default function GymTracker() {
       const s = typeof sets === "number" ? sets : 0;
       const r = typeof reps === "number" ? reps : 0;
       setSuccessMode(w > recent.weight || (w === recent.weight && s > recent.sets) || (w === recent.weight && s === recent.sets && r > recent.reps));
+      
       const dailyMaxMap = new Map<string, number>();
       [...matches].reverse().forEach((entry) => {
         const dateStr = `${new Date(entry.date).getMonth() + 1}/${new Date(entry.date).getDate()}`;
@@ -150,7 +151,6 @@ export default function GymTracker() {
     link.click();
   };
 
-  // --- NEW: BULLETPROOF CSV IMPORTER ---
   const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -159,27 +159,23 @@ export default function GymTracker() {
     reader.onload = (e) => {
       try {
         const csvText = e.target?.result as string;
-        // Strip hidden carriage returns and remove empty lines
         const lines = csvText.replace(/\r/g, '').split('\n').filter(line => line.trim().length > 0);
         
         if (lines.length < 2) throw new Error("File is empty or missing headers");
 
-        // Automatically detect if your phone/Excel used semicolons or commas
         const separator = lines[0].includes(';') ? ';' : ',';
         const importedWorkouts: Workout[] = [];
 
         for (let i = 1; i < lines.length; i++) {
           const parts = lines[i].split(separator);
-          if (parts.length < 7) continue; // Skip broken rows
+          if (parts.length < 7) continue;
 
           const [dateStr, exercise, category, equipment, weightStr, setsStr, repsStr] = parts;
           
-          // Safe ID fallback for strict mobile browsers
           const safeId = typeof crypto !== 'undefined' && crypto.randomUUID 
             ? crypto.randomUUID() 
             : Date.now().toString(36) + Math.random().toString(36).substring(2);
 
-          // Safe Date fallback
           let parsedDate = new Date();
           const parsed = new Date(dateStr.trim());
           if (!isNaN(parsed.getTime())) parsedDate = parsed;
@@ -206,7 +202,6 @@ export default function GymTracker() {
           alert("Could not find any readable records in that CSV.");
         }
         
-        // Reset the file input so you can re-upload if needed
         if (fileInputRef.current) fileInputRef.current.value = '';
       } catch (error) {
         console.error(error);
@@ -218,6 +213,49 @@ export default function GymTracker() {
 
   const clearHistory = () => { if (confirm("Wipe all data?")) { setHistory([]); localStorage.removeItem("boutiqueGymHistory"); } };
 
+  // --- RESTORED: THE READABLE GRAPH ---
+  const renderGraph = () => {
+    if (chartData.length < 2) return null;
+
+    const width = 300;
+    const height = 60;
+    const padding = 10;
+
+    const weights = chartData.map((d) => d.maxWeight);
+    const maxW = Math.max(...weights);
+    const minW = Math.min(...weights);
+    const yRange = maxW === minW ? 1 : maxW - minW;
+
+    const points = chartData.map((data, i) => {
+      const x = padding + (i / (chartData.length - 1)) * (width - padding * 2);
+      const y = height - padding - ((data.maxWeight - minW) / yRange) * (height - padding * 2);
+      return { x, y, ...data };
+    });
+
+    const pathD = `M ${points.map((p) => `${p.x} ${p.y}`).join(" L ")}`;
+
+    return (
+      <div className="mt-6 pt-4 border-t border-gray-100">
+        <div className="flex justify-between items-center mb-4">
+          <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Progression</p>
+          <p className="text-[10px] uppercase tracking-widest font-bold text-[#A9C2A3]">Trend</p>
+        </div>
+
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-16 overflow-visible">
+          <path d={pathD} fill="none" stroke="#A9C2A3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-70" />
+          {points.map((p, i) => (
+            <circle key={i} cx={p.x} cy={p.y} r="4" fill="#E8B4B8" stroke="white" strokeWidth="1.5" className="transition-all hover:r-6" />
+          ))}
+        </svg>
+
+        <div className="flex justify-between text-[10px] text-gray-400 mt-4 font-bold uppercase tracking-wider">
+          <span>{chartData[0].date}: {chartData[0].maxWeight > 0 ? `${chartData[0].maxWeight}kg` : "BW"}</span>
+          <span>{chartData[chartData.length - 1].date}: {chartData[chartData.length - 1].maxWeight > 0 ? `${chartData[chartData.length - 1].maxWeight}kg` : "BW"}</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-white text-gray-700 p-6 font-sans flex flex-col items-center pt-12 pb-20">
       <div className="w-full max-w-md space-y-8">
@@ -227,16 +265,12 @@ export default function GymTracker() {
         </div>
 
         {lastRecord && (
-          <div className={`p-6 rounded-2xl transition-all duration-300 ${successMode ? "bg-[#A9C2A3]/10 border border-[#A9C2A3]/50" : "bg-white border border-gray-200 shadow-sm"}`}>
+          <div className={`p-6 rounded-3xl transition-all duration-300 ${successMode ? "bg-[#A9C2A3]/10 border border-[#A9C2A3]/50" : "bg-white border border-gray-100 shadow-sm"}`}>
             <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">Last Time ({getEquipmentLabel(lastRecord.equipment)})</p>
             <p className="text-xl font-medium text-gray-700">{lastRecord.weight > 0 ? `${lastRecord.weight}kg for ` : ""}{lastRecord.sets} × {lastRecord.reps}</p>
-            {chartData.length >= 2 && (
-              <div className="mt-5 pt-4 border-t border-gray-100">
-                <svg viewBox="0 0 300 60" className="w-full h-16 overflow-visible">
-                  <path d={`M ${chartData.map((d, i) => `${10 + (i / (chartData.length - 1)) * 280} ${60 - 10 - ((d.maxWeight - Math.min(...chartData.map(w => w.maxWeight))) / (Math.max(...chartData.map(w => w.maxWeight)) === Math.min(...chartData.map(w => w.maxWeight)) ? 1 : Math.max(...chartData.map(w => w.maxWeight)) - Math.min(...chartData.map(w => w.maxWeight)))) * 40}`).join(' L ')}`} fill="none" stroke="#A9C2A3" strokeWidth="3" strokeLinecap="round" className="opacity-70" />
-                </svg>
-              </div>
-            )}
+            
+            {/* The Graph actually gets rendered here now! */}
+            {renderGraph()}
           </div>
         )}
 
@@ -296,7 +330,7 @@ export default function GymTracker() {
               <p className="text-[10px] text-gray-300 font-semibold uppercase tracking-wider ml-1">{cat} Body</p>
               <div className="flex flex-wrap gap-2">
                 {groupedExercises[cat].map((ex, i) => (
-                  <button key={i} onClick={() => handleSelectPastExercise(ex, cat)} className={`px-4 py-2 text-sm font-medium rounded-full flex items-center space-x-1.5 ${exercisesToday.has(ex) ? "bg-[#A9C2A3]/15 text-[#6B8565]" : "bg-[#A9C2A3] text-white shadow-sm"}`}>
+                  <button key={i} onClick={() => handleSelectPastExercise(ex, cat)} className={`px-4 py-2 text-sm font-medium rounded-full flex items-center space-x-1.5 ${exercisesToday.has(ex) ? "bg-[#A9C2A3]/15 text-[#6B8565]" : "bg-[#A9C2A3] text-white"}`}>
                     <span>{getEquipmentIcon(equipmentMap.get(ex))}</span>
                     <span>{ex}</span>
                   </button>
