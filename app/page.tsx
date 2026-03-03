@@ -29,9 +29,21 @@ export default function GymTracker() {
 
   const todayStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
 
-  useEffect(() => {
+useEffect(() => {
+    // 1. Load your history
     const saved = localStorage.getItem("boutiqueGymHistory");
     if (saved) setHistory(JSON.parse(saved));
+
+    // 2. Hire the Service Worker for Offline Mode
+    if (typeof window !== "undefined" && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('Offline mode activated! Scope:', registration.scope);
+        })
+        .catch((error) => {
+          console.error('Offline mode failed:', error);
+        });
+    }
   }, []);
 
   const isToday = (dateString: string) => {
