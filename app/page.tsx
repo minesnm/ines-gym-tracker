@@ -23,7 +23,7 @@ export default function GymTracker() {
   
   const [history, setHistory] = useState<Workout[]>([]);
   const [lastRecord, setLastRecord] = useState<Workout | null>(null);
-  const [todayRecord, setTodayRecord] = useState<Workout | null>(null); // NEW: Tracks if logged today
+  const [todayRecord, setTodayRecord] = useState<Workout | null>(null); 
   const [successMode, setSuccessMode] = useState(false);
   const [chartData, setChartData] = useState<{ date: string; maxWeight: number }[]>([]);
   
@@ -80,8 +80,6 @@ export default function GymTracker() {
     return "Weights";
   };
 
-  // --- UPDATED: SPLIT LOGIC FOR BETTER STABILITY ---
-  // 1. Fetches records and chart data when the exercise changes
   useEffect(() => {
     if (exercise.trim().length < 2) { 
       setLastRecord(null); 
@@ -104,7 +102,6 @@ export default function GymTracker() {
       setTodayRecord(tRecord);
       setLastRecord(lRecord);
 
-      // Auto-select category/equipment only when typing a new exercise
       const refRecord = tRecord || lRecord;
       if (refRecord) {
         setCategory(refRecord.category);
@@ -129,7 +126,6 @@ export default function GymTracker() {
     }
   }, [exercise, history]);
 
-  // 2. Calculates "Success Mode" separately so changing weights doesn't reset your equipment toggle!
   useEffect(() => {
     if (lastRecord) {
       const w = typeof weight === "number" ? weight : 0;
@@ -167,7 +163,6 @@ export default function GymTracker() {
     }
   };
 
-  // --- UPDATED: SAVE OVERRIDE LOGIC ---
   const handleSave = () => {
     if (!exercise) return;
     triggerHaptic([100, 50, 100]);
@@ -175,7 +170,6 @@ export default function GymTracker() {
     const normalize = (str: string) => str.toLowerCase().trim().replace(/s$/, "");
     const currentNorm = normalize(exercise);
     
-    // Look to see if we already saved this exact exercise today
     const existingTodayIndex = history.findIndex(
       (entry) => isToday(entry.date) && normalize(entry.exercise) === currentNorm
     );
@@ -183,7 +177,6 @@ export default function GymTracker() {
     let updatedHistory;
 
     if (existingTodayIndex >= 0) {
-      // OVERRIDE MODE: Update the existing entry for today instead of creating a duplicate
       updatedHistory = [...history];
       updatedHistory[existingTodayIndex] = {
         ...updatedHistory[existingTodayIndex],
@@ -192,10 +185,9 @@ export default function GymTracker() {
         weight: Number(weight) || 0,
         sets: Number(sets) || 0,
         reps: Number(reps) || 0,
-        date: new Date().toISOString() // refresh the timestamp
+        date: new Date().toISOString() 
       };
     } else {
-      // NEW SET MODE
       const newEntry: Workout = { id: crypto.randomUUID(), exercise: exercise.trim(), category, equipment, weight: Number(weight) || 0, sets: Number(sets) || 0, reps: Number(reps) || 0, date: new Date().toISOString() };
       updatedHistory = [...history, newEntry];
     }
@@ -338,7 +330,8 @@ export default function GymTracker() {
         {todayRecord ? (
           <div className="p-6 rounded-3xl transition-all duration-300 bg-[#E8B4B8]/10 border border-[#E8B4B8]/40 shadow-sm">
             <div className="flex justify-between items-center mb-1">
-              <p className="text-xs uppercase tracking-widest text-[#E8B4B8] font-bold">Today's Log ({getEquipmentLabel(todayRecord.equipment)})</p>
+              {/* FIXED: Apostrophe encoded as &apos; here */}
+              <p className="text-xs uppercase tracking-widest text-[#E8B4B8] font-bold">Today&apos;s Log ({getEquipmentLabel(todayRecord.equipment)})</p>
               <span className="text-[9px] bg-[#E8B4B8] text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Active</span>
             </div>
             <p className="text-xl font-medium text-gray-800">{todayRecord.weight > 0 ? `${todayRecord.weight}kg for ` : ""}{todayRecord.sets} × {todayRecord.reps}</p>
@@ -398,7 +391,6 @@ export default function GymTracker() {
           </div>
         </div>
 
-        {/* DYNAMIC SAVE BUTTON */}
         <button onClick={handleSave} disabled={!exercise || isSaved} className={`w-full mt-4 min-h-[60px] rounded-xl text-lg font-medium tracking-wide transition-all ${isSaved ? "bg-[#A9C2A3] text-white" : "bg-[#E8B4B8] text-white shadow-sm disabled:opacity-40"}`}>
           {isSaved ? "✓ Saved" : (todayRecord ? "UPDATE SET" : "SAVE SET")}
         </button>
