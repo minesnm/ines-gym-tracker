@@ -59,7 +59,6 @@ export default function GymTracker() {
 
   const exercisesToday = new Set(history.filter((item) => isToday(item.date)).map((item) => item.exercise));
 
-  // --- HELPERS (REPAIRED) ---
   const getEquipmentIcon = (eq: string) => {
     if (eq === "machine") return "🔩";
     if (eq === "bodyweight") return "💪";
@@ -100,10 +99,19 @@ export default function GymTracker() {
 
   const triggerHaptic = (pattern: number | number[]) => { if (typeof window !== "undefined" && window.navigator?.vibrate) window.navigator.vibrate(pattern); };
   
-  const handleIncrement = (setter: any, val: any) => { triggerHaptic(30); setter(typeof val === "number" ? val + 1 : 1); };
-  const handleDecrement = (setter: any, val: any) => { triggerHaptic(30); setter(typeof val === "number" && val > 0 ? val - 1 : 0); };
+  // FIXED: Removed 'any' and applied strict React types
+  const handleIncrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { 
+    triggerHaptic(30); 
+    setter(typeof val === "number" ? val + 1 : 1); 
+  };
+  
+  const handleDecrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { 
+    triggerHaptic(30); 
+    setter(typeof val === "number" && val > 0 ? val - 1 : 0); 
+  };
 
-  const handleSelectPastExercise = (exName: string, cat: any) => {
+  // FIXED: Applied strictly defined category type instead of 'any'
+  const handleSelectPastExercise = (exName: string, cat: "upper" | "lower" | "core") => {
     triggerHaptic(20); setExercise(exName); setCategory(cat);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
     const normalize = (str: string) => str.toLowerCase().trim().replace(/s$/, "");
@@ -125,7 +133,6 @@ export default function GymTracker() {
     setTimeout(() => setIsSaved(false), 1500);
   };
 
-  // --- CSV EXPORT FOR GOOGLE SHEETS ---
   const exportToCSV = () => {
     triggerHaptic(50);
     const headers = ["Date", "Exercise", "Category", "Equipment", "Weight (kg)", "Sets", "Reps"];
@@ -161,7 +168,10 @@ export default function GymTracker() {
             localStorage.setItem("boutiqueGymHistory", JSON.stringify(imported));
           }
         }
-      } catch (err) { alert("Please use a valid JSON backup file for imports."); }
+      // FIXED: Removed the unused 'err' variable from the catch block
+      } catch { 
+        alert("Please use a valid JSON backup file for imports."); 
+      }
     };
     reader.readAsText(file);
   };
@@ -225,7 +235,7 @@ export default function GymTracker() {
           </div>
         </div>
 
-        <button onClick={handleSave} disabled={!exercise || isSaved} className={`w-full mt-4 min-h-[60px] rounded-xl text-lg font-medium tracking-wide transition-all ${isSaved ? "bg-[#A9C2A3] text-white" : "bg-[#E8B4B8] text-white shadow-sm"}`}>
+        <button onClick={handleSave} disabled={!exercise || isSaved} className={`w-full mt-4 min-h-[60px] rounded-xl text-lg font-medium tracking-wide transition-all ${isSaved ? "bg-[#A9C2A3] text-white" : "bg-[#E8B4B8] text-white shadow-sm disabled:opacity-40"}`}>
           {isSaved ? "✓ Saved" : "Save Set"}
         </button>
 
@@ -256,10 +266,11 @@ export default function GymTracker() {
           ))}
         </div>
 
+        {/* BOTTOM UTILITY BAR */}
         <div className="pt-12 flex justify-center items-center space-x-6 opacity-30 hover:opacity-100 transition-opacity">
           <input type="file" accept=".json" onChange={importData} ref={fileInputRef} className="hidden" />
-          <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-bold uppercase tracking-widest text-gray-500">↑ Import</button>
-          <button onClick={exportToCSV} className="text-[10px] font-bold uppercase tracking-widest text-gray-500">↓ Export CSV</button>
+          <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800">↑ Import</button>
+          <button onClick={exportToCSV} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800">↓ Export CSV</button>
           <button onClick={clearHistory} className="text-[10px] font-bold uppercase tracking-widest text-red-400">× Wipe</button>
         </div>
       </div>
