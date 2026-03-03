@@ -20,13 +20,11 @@ export default function GymTracker() {
   const [weight, setWeight] = useState<number | "">(20);
   const [sets, setSets] = useState<number | "">(3);
   const [reps, setReps] = useState<number | "">(10);
-  
   const [history, setHistory] = useState<Workout[]>([]);
   const [lastRecord, setLastRecord] = useState<Workout | null>(null);
   const [todayRecord, setTodayRecord] = useState<Workout | null>(null); 
   const [successMode, setSuccessMode] = useState(false);
   const [chartData, setChartData] = useState<{ date: string; maxWeight: number }[]>([]);
-  
   const [isSaved, setIsSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -330,18 +328,23 @@ export default function GymTracker() {
         {todayRecord ? (
           <div className="p-6 rounded-3xl transition-all duration-300 bg-[#E8B4B8]/10 border border-[#E8B4B8]/40 shadow-sm">
             <div className="flex justify-between items-center mb-1">
-              {/* FIXED: Apostrophe encoded as &apos; here */}
               <p className="text-xs uppercase tracking-widest text-[#E8B4B8] font-bold">Today&apos;s Log ({getEquipmentLabel(todayRecord.equipment)})</p>
               <span className="text-[9px] bg-[#E8B4B8] text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Active</span>
             </div>
-            <p className="text-xl font-medium text-gray-800">{todayRecord.weight > 0 ? `${todayRecord.weight}kg for ` : ""}{todayRecord.sets} × {todayRecord.reps}</p>
+            <p className="text-xl font-medium text-gray-800">
+              {todayRecord.weight > 0 ? `${todayRecord.weight}kg ` : ""}
+              {todayRecord.reps} × {todayRecord.sets}
+            </p>
             <p className="mt-1 text-[10px] font-semibold text-[#E8B4B8]/80 uppercase tracking-widest">Updating will override this entry</p>
             {renderGraph()}
           </div>
         ) : lastRecord ? (
           <div className={`p-6 rounded-3xl transition-all duration-300 ${successMode ? "bg-[#A9C2A3]/10 border border-[#A9C2A3]/50" : "bg-white border border-gray-100 shadow-sm"}`}>
             <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">Last Time ({getEquipmentLabel(lastRecord.equipment)})</p>
-            <p className="text-xl font-medium text-gray-700">{lastRecord.weight > 0 ? `${lastRecord.weight}kg for ` : ""}{lastRecord.sets} × {lastRecord.reps}</p>
+            <p className="text-xl font-medium text-gray-700">
+              {lastRecord.weight > 0 ? `${lastRecord.weight}kg ` : ""}
+              {lastRecord.reps} × {lastRecord.sets}
+            </p>
             {renderGraph()}
           </div>
         ) : null}
@@ -355,8 +358,10 @@ export default function GymTracker() {
             </div>
             <div className="flex space-x-2">
               <input type="text" placeholder="e.g., Leg Press" value={exercise} onChange={(e) => setExercise(e.target.value)} className="flex-1 bg-gray-50/50 border border-gray-200 rounded-xl p-4 outline-none focus:border-[#E8B4B8] text-lg" />
-              <button onClick={() => { triggerHaptic(20); setEquipment(equipment === "free" ? "machine" : equipment === "machine" ? "bodyweight" : "free"); }} className="w-[60px] bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-center">
-                <span className="text-xl">{getEquipmentIcon(equipment)}</span>
+              {/* FIXED: Removed the .slice(0, 4) so the full word displays */}
+              <button onClick={() => { triggerHaptic(20); setEquipment(equipment === "free" ? "machine" : equipment === "machine" ? "bodyweight" : "free"); }} className="w-[64px] bg-gray-50 border border-gray-200 rounded-xl flex flex-col items-center justify-center">
+                <span className="text-xl mb-0.5">{getEquipmentIcon(equipment)}</span>
+                <span className="text-[7px] uppercase tracking-widest text-gray-400 font-bold">{getEquipmentLabel(equipment)}</span>
               </button>
             </div>
           </div>
