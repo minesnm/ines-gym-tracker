@@ -33,10 +33,10 @@ export default function GymTracker() {
     const saved = localStorage.getItem("boutiqueGymHistory");
     if (saved) setHistory(JSON.parse(saved));
 
-    // Offline Mode Service Worker
+    // FIXED: Removed the unused 'registration' variable
     if (typeof window !== "undefined" && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
-        .then((registration) => console.log('Offline mode activated!'))
+        .then(() => console.log('Offline mode activated!'))
         .catch((error) => console.error('Offline mode failed:', error));
     }
   }, []);
@@ -66,7 +66,8 @@ export default function GymTracker() {
 
   const exercisesToday = new Set(history.filter((item) => isToday(item.date)).map((item) => item.exercise));
 
-  const getEquipmentIcon = (eq: string) => {
+  // FIXED: Allowed this function to accept undefined, defaulting to free weights
+  const getEquipmentIcon = (eq?: string) => {
     if (eq === "machine") return "🔩";
     if (eq === "bodyweight") return "💪";
     return "🏋️";
@@ -160,7 +161,6 @@ export default function GymTracker() {
     link.click();
   };
 
-  // --- FIXED: PARSE CSV FILES PROPERLY ---
   const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -169,17 +169,15 @@ export default function GymTracker() {
     reader.onload = (e) => {
       try {
         const csvText = e.target?.result as string;
-        // Split by line and remove empty lines
         const lines = csvText.split('\n').filter(line => line.trim().length > 0);
         
         if (lines.length < 2) throw new Error("File is empty or missing headers");
 
-        // Skip the header row and map the rest into Workout objects
         const importedWorkouts: Workout[] = lines.slice(1).map(line => {
           const [dateStr, exercise, category, equipment, weightStr, setsStr, repsStr] = line.split(',');
           
           return {
-            id: crypto.randomUUID(), // Generate a new ID for each imported set
+            id: crypto.randomUUID(), 
             date: new Date(dateStr).toISOString(),
             exercise: exercise.trim(),
             category: category.trim() as "upper" | "lower" | "core",
@@ -194,7 +192,6 @@ export default function GymTracker() {
           setHistory(importedWorkouts);
           localStorage.setItem("boutiqueGymHistory", JSON.stringify(importedWorkouts));
           triggerHaptic([50, 100, 50]);
-          // Clear the input so you can re-import the same file later if needed
           if (fileInputRef.current) fileInputRef.current.value = '';
         }
       } catch {
@@ -294,7 +291,7 @@ export default function GymTracker() {
           ))}
         </div>
 
-        {/* BOTTOM UTILITY BAR (Fixed for CSV Import) */}
+        {/* BOTTOM UTILITY BAR */}
         <div className="pt-12 flex justify-center items-center space-x-6 opacity-30 hover:opacity-100 transition-opacity">
           <input type="file" accept=".csv" onChange={importData} ref={fileInputRef} className="hidden" />
           <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800">↑ Import CSV</button>
