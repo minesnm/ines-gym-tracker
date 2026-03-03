@@ -33,7 +33,6 @@ export default function GymTracker() {
     const saved = localStorage.getItem("boutiqueGymHistory");
     if (saved) setHistory(JSON.parse(saved));
 
-    // FIXED: Removed the unused 'registration' variable
     if (typeof window !== "undefined" && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
         .then(() => console.log('Offline mode activated!'))
@@ -66,7 +65,6 @@ export default function GymTracker() {
 
   const exercisesToday = new Set(history.filter((item) => isToday(item.date)).map((item) => item.exercise));
 
-  // FIXED: Allowed this function to accept undefined, defaulting to free weights
   const getEquipmentIcon = (eq?: string) => {
     if (eq === "machine") return "🔩";
     if (eq === "bodyweight") return "💪";
@@ -108,13 +106,11 @@ export default function GymTracker() {
   const triggerHaptic = (pattern: number | number[]) => { if (typeof window !== "undefined" && window.navigator?.vibrate) window.navigator.vibrate(pattern); };
   
   const handleIncrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { 
-    triggerHaptic(30); 
-    setter(typeof val === "number" ? val + 1 : 1); 
+    triggerHaptic(30); setter(typeof val === "number" ? val + 1 : 1); 
   };
   
   const handleDecrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { 
-    triggerHaptic(30); 
-    setter(typeof val === "number" && val > 0 ? val - 1 : 0); 
+    triggerHaptic(30); setter(typeof val === "number" && val > 0 ? val - 1 : 0); 
   };
 
   const handleSelectPastExercise = (exName: string, cat: "upper" | "lower" | "core") => {
@@ -143,15 +139,8 @@ export default function GymTracker() {
     triggerHaptic(50);
     const headers = ["Date", "Exercise", "Category", "Equipment", "Weight (kg)", "Sets", "Reps"];
     const rows = history.map(w => [
-      new Date(w.date).toLocaleDateString(),
-      w.exercise,
-      w.category,
-      w.equipment,
-      w.weight,
-      w.sets,
-      w.reps
+      new Date(w.date).toLocaleDateString(), w.exercise, w.category, w.equipment, w.weight, w.sets, w.reps
     ]);
-
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -161,6 +150,7 @@ export default function GymTracker() {
     link.click();
   };
 
+  // --- NEW: BULLETPROOF CSV IMPORTER ---
   const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -169,33 +159,58 @@ export default function GymTracker() {
     reader.onload = (e) => {
       try {
         const csvText = e.target?.result as string;
-        const lines = csvText.split('\n').filter(line => line.trim().length > 0);
+        // Strip hidden carriage returns and remove empty lines
+        const lines = csvText.replace(/\r/g, '').split('\n').filter(line => line.trim().length > 0);
         
         if (lines.length < 2) throw new Error("File is empty or missing headers");
 
-        const importedWorkouts: Workout[] = lines.slice(1).map(line => {
-          const [dateStr, exercise, category, equipment, weightStr, setsStr, repsStr] = line.split(',');
+        // Automatically detect if your phone/Excel used semicolons or commas
+        const separator = lines[0].includes(';') ? ';' : ',';
+        const importedWorkouts: Workout[] = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(separator);
+          if (parts.length < 7) continue; // Skip broken rows
+
+          const [dateStr, exercise, category, equipment, weightStr, setsStr, repsStr] = parts;
           
-          return {
-            id: crypto.randomUUID(), 
-            date: new Date(dateStr).toISOString(),
-            exercise: exercise.trim(),
-            category: category.trim() as "upper" | "lower" | "core",
-            equipment: equipment.trim() as "free" | "machine" | "bodyweight",
+          // Safe ID fallback for strict mobile browsers
+          const safeId = typeof crypto !== 'undefined' && crypto.randomUUID 
+            ? crypto.randomUUID() 
+            : Date.now().toString(36) + Math.random().toString(36).substring(2);
+
+          // Safe Date fallback
+          let parsedDate = new Date();
+          const parsed = new Date(dateStr.trim());
+          if (!isNaN(parsed.getTime())) parsedDate = parsed;
+
+          importedWorkouts.push({
+            id: safeId,
+            date: parsedDate.toISOString(),
+            exercise: exercise?.trim() || "Unknown",
+            category: (category?.trim() || "lower") as "upper" | "lower" | "core",
+            equipment: (equipment?.trim() || "free") as "free" | "machine" | "bodyweight",
             weight: Number(weightStr) || 0,
             sets: Number(setsStr) || 0,
             reps: Number(repsStr) || 0,
-          };
-        });
-
-        if (confirm(`Import ${importedWorkouts.length} records? This replaces your current history.`)) {
-          setHistory(importedWorkouts);
-          localStorage.setItem("boutiqueGymHistory", JSON.stringify(importedWorkouts));
-          triggerHaptic([50, 100, 50]);
-          if (fileInputRef.current) fileInputRef.current.value = '';
+          });
         }
-      } catch {
-        alert("Please use a valid CSV backup file generated by this app."); 
+
+        if (importedWorkouts.length > 0) {
+          if (confirm(`Successfully parsed ${importedWorkouts.length} records. Overwrite your current history?`)) {
+            setHistory(importedWorkouts);
+            localStorage.setItem("boutiqueGymHistory", JSON.stringify(importedWorkouts));
+            triggerHaptic([50, 100, 50]);
+          }
+        } else {
+          alert("Could not find any readable records in that CSV.");
+        }
+        
+        // Reset the file input so you can re-upload if needed
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      } catch (error) {
+        console.error(error);
+        alert("Import failed. The CSV file might be corrupted."); 
       }
     };
     reader.readAsText(file);
@@ -281,7 +296,7 @@ export default function GymTracker() {
               <p className="text-[10px] text-gray-300 font-semibold uppercase tracking-wider ml-1">{cat} Body</p>
               <div className="flex flex-wrap gap-2">
                 {groupedExercises[cat].map((ex, i) => (
-                  <button key={i} onClick={() => handleSelectPastExercise(ex, cat)} className={`px-4 py-2 text-sm font-medium rounded-full flex items-center space-x-1.5 ${exercisesToday.has(ex) ? "bg-[#A9C2A3]/15 text-[#6B8565]" : "bg-[#A9C2A3] text-white"}`}>
+                  <button key={i} onClick={() => handleSelectPastExercise(ex, cat)} className={`px-4 py-2 text-sm font-medium rounded-full flex items-center space-x-1.5 ${exercisesToday.has(ex) ? "bg-[#A9C2A3]/15 text-[#6B8565]" : "bg-[#A9C2A3] text-white shadow-sm"}`}>
                     <span>{getEquipmentIcon(equipmentMap.get(ex))}</span>
                     <span>{ex}</span>
                   </button>
@@ -291,7 +306,6 @@ export default function GymTracker() {
           ))}
         </div>
 
-        {/* BOTTOM UTILITY BAR */}
         <div className="pt-12 flex justify-center items-center space-x-6 opacity-30 hover:opacity-100 transition-opacity">
           <input type="file" accept=".csv" onChange={importData} ref={fileInputRef} className="hidden" />
           <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800">↑ Import CSV</button>
