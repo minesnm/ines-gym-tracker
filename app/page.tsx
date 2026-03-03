@@ -97,10 +97,16 @@ export default function GymTracker() {
       
       const dailyMaxMap = new Map<string, number>();
       [...matches].reverse().forEach((entry) => {
-        const dateStr = `${new Date(entry.date).getMonth() + 1}/${new Date(entry.date).getDate()}`;
+        const dateObj = new Date(entry.date);
+        const day = dateObj.getDate();
+        const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+        const dateStr = `${day}/${month}`;
+        
         if (!dailyMaxMap.has(dateStr) || (dailyMaxMap.get(dateStr) || 0) < entry.weight) dailyMaxMap.set(dateStr, entry.weight);
       });
-      setChartData(Array.from(dailyMaxMap, ([date, maxWeight]) => ({ date, maxWeight })));
+      
+      const chartPoints = Array.from(dailyMaxMap, ([date, maxWeight]) => ({ date, maxWeight })).slice(-7);
+      setChartData(chartPoints);
     } else { setLastRecord(null); setSuccessMode(false); setChartData([]); }
   }, [exercise, history, weight, sets, reps]);
 
@@ -160,16 +166,13 @@ export default function GymTracker() {
       try {
         const csvText = e.target?.result as string;
         const lines = csvText.replace(/\r/g, '').split('\n').filter(line => line.trim().length > 0);
-        
         if (lines.length < 2) throw new Error("File is empty or missing headers");
-
         const separator = lines[0].includes(';') ? ';' : ',';
         const importedWorkouts: Workout[] = [];
 
         for (let i = 1; i < lines.length; i++) {
           const parts = lines[i].split(separator);
           if (parts.length < 7) continue;
-
           const [dateStr, exercise, category, equipment, weightStr, setsStr, repsStr] = parts;
           
           const safeId = typeof crypto !== 'undefined' && crypto.randomUUID 
@@ -201,7 +204,6 @@ export default function GymTracker() {
         } else {
           alert("Could not find any readable records in that CSV.");
         }
-        
         if (fileInputRef.current) fileInputRef.current.value = '';
       } catch (error) {
         console.error(error);
@@ -213,45 +215,45 @@ export default function GymTracker() {
 
   const clearHistory = () => { if (confirm("Wipe all data?")) { setHistory([]); localStorage.removeItem("boutiqueGymHistory"); } };
 
-  // --- RESTORED: THE READABLE GRAPH ---
   const renderGraph = () => {
     if (chartData.length < 2) return null;
-
     const width = 300;
-    const height = 60;
-    const padding = 10;
-
+    const height = 90; 
+    const paddingX = 20; 
+    const paddingY = 25; 
     const weights = chartData.map((d) => d.maxWeight);
     const maxW = Math.max(...weights);
     const minW = Math.min(...weights);
     const yRange = maxW === minW ? 1 : maxW - minW;
 
     const points = chartData.map((data, i) => {
-      const x = padding + (i / (chartData.length - 1)) * (width - padding * 2);
-      const y = height - padding - ((data.maxWeight - minW) / yRange) * (height - padding * 2);
+      const x = paddingX + (i / (chartData.length - 1)) * (width - paddingX * 2);
+      const y = height - paddingY - ((data.maxWeight - minW) / yRange) * (height - paddingY * 2);
       return { x, y, ...data };
     });
 
     const pathD = `M ${points.map((p) => `${p.x} ${p.y}`).join(" L ")}`;
 
     return (
-      <div className="mt-6 pt-4 border-t border-gray-100">
+      <div className="mt-5 pt-4 border-t border-gray-100">
         <div className="flex justify-between items-center mb-4">
           <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Progression</p>
           <p className="text-[10px] uppercase tracking-widest font-bold text-[#A9C2A3]">Trend</p>
         </div>
-
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-16 overflow-visible">
-          <path d={pathD} fill="none" stroke="#A9C2A3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-70" />
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-24 overflow-visible">
+          <path d={pathD} fill="none" stroke="#A9C2A3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-50" />
           {points.map((p, i) => (
-            <circle key={i} cx={p.x} cy={p.y} r="4" fill="#E8B4B8" stroke="white" strokeWidth="1.5" className="transition-all hover:r-6" />
+            <g key={i}>
+              <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fontWeight="bold" fill="#4B5563">
+                {p.maxWeight > 0 ? `${p.maxWeight}` : "BW"}
+              </text>
+              <circle cx={p.x} cy={p.y} r="4" fill="#E8B4B8" stroke="white" strokeWidth="1.5" />
+              <text x={p.x} y={height - 2} textAnchor="middle" fontSize="9" fill="#9CA3AF" fontWeight="600">
+                {p.date}
+              </text>
+            </g>
           ))}
         </svg>
-
-        <div className="flex justify-between text-[10px] text-gray-400 mt-4 font-bold uppercase tracking-wider">
-          <span>{chartData[0].date}: {chartData[0].maxWeight > 0 ? `${chartData[0].maxWeight}kg` : "BW"}</span>
-          <span>{chartData[chartData.length - 1].date}: {chartData[chartData.length - 1].maxWeight > 0 ? `${chartData[chartData.length - 1].maxWeight}kg` : "BW"}</span>
-        </div>
       </div>
     );
   };
@@ -268,8 +270,6 @@ export default function GymTracker() {
           <div className={`p-6 rounded-3xl transition-all duration-300 ${successMode ? "bg-[#A9C2A3]/10 border border-[#A9C2A3]/50" : "bg-white border border-gray-100 shadow-sm"}`}>
             <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">Last Time ({getEquipmentLabel(lastRecord.equipment)})</p>
             <p className="text-xl font-medium text-gray-700">{lastRecord.weight > 0 ? `${lastRecord.weight}kg for ` : ""}{lastRecord.sets} × {lastRecord.reps}</p>
-            
-            {/* The Graph actually gets rendered here now! */}
             {renderGraph()}
           </div>
         )}
@@ -289,22 +289,32 @@ export default function GymTracker() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between bg-gray-50/50 border border-gray-200 rounded-xl p-2 min-h-[60px]">
-            <button onClick={() => handleDecrement(setWeight, weight)} className="w-14 h-12 rounded-lg flex items-center justify-center bg-white border border-gray-100 shadow-sm text-2xl text-gray-600">-</button>
-            <input type="number" value={weight} onChange={(e) => setWeight(e.target.value === "" ? "" : Number(e.target.value))} className="w-20 text-center bg-transparent outline-none font-medium text-2xl" />
-            <button onClick={() => handleIncrement(setWeight, weight)} className="w-14 h-12 rounded-lg flex items-center justify-center bg-white border border-gray-100 shadow-sm text-2xl text-gray-600">+</button>
+          <div className="flex items-center justify-between bg-gray-50/50 border border-gray-200 rounded-2xl p-2 min-h-[60px]">
+            <button onClick={() => handleDecrement(setWeight, weight)} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">-</button>
+            <div className="flex items-baseline justify-center flex-1">
+                <input type="number" value={weight} onChange={(e) => setWeight(e.target.value === "" ? "" : Number(e.target.value))} className="w-16 text-right bg-transparent outline-none font-semibold text-3xl text-gray-800" />
+                <span className="text-sm font-bold text-gray-400 ml-1.5 uppercase tracking-wide">kg</span>
+            </div>
+            <button onClick={() => handleIncrement(setWeight, weight)} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">+</button>
           </div>
 
           <div className="flex space-x-4">
-            <div className="flex-1 bg-gray-50/50 border border-gray-200 rounded-xl p-1 flex items-center justify-between px-3">
-              <button onClick={() => handleDecrement(setSets, sets)} className="text-xl px-2 text-gray-400">-</button>
-              <input type="number" value={sets} onChange={(e) => setSets(e.target.value === "" ? "" : Number(e.target.value))} className="w-10 text-center bg-transparent outline-none font-medium text-lg" />
-              <button onClick={() => handleIncrement(setSets, sets)} className="text-xl px-2 text-gray-400">+</button>
+            <div className="flex-1 bg-gray-50/50 border border-gray-200 rounded-2xl p-2 flex items-center justify-between shadow-sm">
+              <button onClick={() => handleDecrement(setSets, sets)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">-</button>
+              <div className="flex items-baseline justify-center">
+                 <input type="number" value={sets} onChange={(e) => setSets(e.target.value === "" ? "" : Number(e.target.value))} className="w-10 text-right bg-transparent outline-none font-semibold text-2xl text-gray-800" />
+                 <span className="text-xs font-bold text-gray-400 ml-1.5 uppercase tracking-wide">sets</span>
+              </div>
+              <button onClick={() => handleIncrement(setSets, sets)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">+</button>
             </div>
-            <div className="flex-1 bg-gray-50/50 border border-gray-200 rounded-xl p-1 flex items-center justify-between px-3">
-              <button onClick={() => handleDecrement(setReps, reps)} className="text-xl px-2 text-gray-400">-</button>
-              <input type="number" value={reps} onChange={(e) => setReps(e.target.value === "" ? "" : Number(e.target.value))} className="w-10 text-center bg-transparent outline-none font-medium text-lg" />
-              <button onClick={() => handleIncrement(setReps, reps)} className="text-xl px-2 text-gray-400">+</button>
+            
+            <div className="flex-1 bg-gray-50/50 border border-gray-200 rounded-2xl p-2 flex items-center justify-between shadow-sm">
+              <button onClick={() => handleDecrement(setReps, reps)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">-</button>
+              <div className="flex items-baseline justify-center">
+                 <input type="number" value={reps} onChange={(e) => setReps(e.target.value === "" ? "" : Number(e.target.value))} className="w-10 text-right bg-transparent outline-none font-semibold text-2xl text-gray-800" />
+                 <span className="text-xs font-bold text-gray-400 ml-1.5 uppercase tracking-wide">reps</span>
+              </div>
+              <button onClick={() => handleIncrement(setReps, reps)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">+</button>
             </div>
           </div>
         </div>
@@ -330,7 +340,7 @@ export default function GymTracker() {
               <p className="text-[10px] text-gray-300 font-semibold uppercase tracking-wider ml-1">{cat} Body</p>
               <div className="flex flex-wrap gap-2">
                 {groupedExercises[cat].map((ex, i) => (
-                  <button key={i} onClick={() => handleSelectPastExercise(ex, cat)} className={`px-4 py-2 text-sm font-medium rounded-full flex items-center space-x-1.5 ${exercisesToday.has(ex) ? "bg-[#A9C2A3]/15 text-[#6B8565]" : "bg-[#A9C2A3] text-white"}`}>
+                  <button key={i} onClick={() => handleSelectPastExercise(ex, cat)} className={`px-4 py-2 text-sm font-medium rounded-full flex items-center space-x-1.5 ${exercisesToday.has(ex) ? "bg-[#A9C2A3]/15 text-[#6B8565]" : "bg-[#A9C2A3] text-white shadow-sm"}`}>
                     <span>{getEquipmentIcon(equipmentMap.get(ex))}</span>
                     <span>{ex}</span>
                   </button>
