@@ -20,10 +20,13 @@ export default function GymTracker() {
   const [weight, setWeight] = useState<number | "">(20);
   const [sets, setSets] = useState<number | "">(3);
   const [reps, setReps] = useState<number | "">(10);
+  
   const [history, setHistory] = useState<Workout[]>([]);
   const [lastRecord, setLastRecord] = useState<Workout | null>(null);
+  const [todayRecord, setTodayRecord] = useState<Workout | null>(null); // NEW: Tracks if logged today
   const [successMode, setSuccessMode] = useState(false);
   const [chartData, setChartData] = useState<{ date: string; maxWeight: number }[]>([]);
+  
   const [isSaved, setIsSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -77,23 +80,36 @@ export default function GymTracker() {
     return "Weights";
   };
 
+  // --- UPDATED: SPLIT LOGIC FOR BETTER STABILITY ---
+  // 1. Fetches records and chart data when the exercise changes
   useEffect(() => {
-    if (exercise.trim().length < 2) { setLastRecord(null); setSuccessMode(false); setChartData([]); return; }
+    if (exercise.trim().length < 2) { 
+      setLastRecord(null); 
+      setTodayRecord(null);
+      setChartData([]); 
+      return; 
+    }
+    
     const normalize = (str: string) => str.toLowerCase().trim().replace(/s$/, "");
     const currentNorm = normalize(exercise);
     const matches = history.filter((entry) => normalize(entry.exercise) === currentNorm);
 
     if (matches.length > 0) {
       const sortedByDate = [...matches].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      const tRecord = sortedByDate.find(entry => isToday(entry.date)) || null;
       const pastRecords = sortedByDate.filter((entry) => !isToday(entry.date));
-      const recent = pastRecords.length > 0 ? pastRecords[0] : sortedByDate[0];
-      setLastRecord(recent);
-      if (recent.category) setCategory(recent.category);
-      if (recent.equipment) setEquipment(recent.equipment);
-      const w = typeof weight === "number" ? weight : 0;
-      const s = typeof sets === "number" ? sets : 0;
-      const r = typeof reps === "number" ? reps : 0;
-      setSuccessMode(w > recent.weight || (w === recent.weight && s > recent.sets) || (w === recent.weight && s === recent.sets && r > recent.reps));
+      const lRecord = pastRecords.length > 0 ? pastRecords[0] : null;
+      
+      setTodayRecord(tRecord);
+      setLastRecord(lRecord);
+
+      // Auto-select category/equipment only when typing a new exercise
+      const refRecord = tRecord || lRecord;
+      if (refRecord) {
+        setCategory(refRecord.category);
+        setEquipment(refRecord.equipment || "free");
+      }
       
       const dailyMaxMap = new Map<string, number>();
       [...matches].reverse().forEach((entry) => {
@@ -105,10 +121,29 @@ export default function GymTracker() {
         if (!dailyMaxMap.has(dateStr) || (dailyMaxMap.get(dateStr) || 0) < entry.weight) dailyMaxMap.set(dateStr, entry.weight);
       });
       
-      const chartPoints = Array.from(dailyMaxMap, ([date, maxWeight]) => ({ date, maxWeight })).slice(-7);
-      setChartData(chartPoints);
-    } else { setLastRecord(null); setSuccessMode(false); setChartData([]); }
-  }, [exercise, history, weight, sets, reps]);
+      setChartData(Array.from(dailyMaxMap, ([date, maxWeight]) => ({ date, maxWeight })).slice(-7));
+    } else { 
+      setLastRecord(null); 
+      setTodayRecord(null);
+      setChartData([]); 
+    }
+  }, [exercise, history]);
+
+  // 2. Calculates "Success Mode" separately so changing weights doesn't reset your equipment toggle!
+  useEffect(() => {
+    if (lastRecord) {
+      const w = typeof weight === "number" ? weight : 0;
+      const s = typeof sets === "number" ? sets : 0;
+      const r = typeof reps === "number" ? reps : 0;
+      setSuccessMode(
+        w > lastRecord.weight || 
+        (w === lastRecord.weight && s > lastRecord.sets) || 
+        (w === lastRecord.weight && s === lastRecord.sets && r > lastRecord.reps)
+      );
+    } else {
+      setSuccessMode(false);
+    }
+  }, [weight, sets, reps, lastRecord]);
 
   const triggerHaptic = (pattern: number | number[]) => { if (typeof window !== "undefined" && window.navigator?.vibrate) window.navigator.vibrate(pattern); };
   
@@ -126,19 +161,50 @@ export default function GymTracker() {
     const normalize = (str: string) => str.toLowerCase().trim().replace(/s$/, "");
     const matches = history.filter((entry) => normalize(entry.exercise) === normalize(exName));
     if (matches.length > 0) {
-      const recent = [...matches].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+      const sortedByDate = [...matches].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const recent = sortedByDate[0];
       setWeight(recent.weight); setSets(recent.sets); setReps(recent.reps); setEquipment(recent.equipment || "free");
     }
   };
 
+  // --- UPDATED: SAVE OVERRIDE LOGIC ---
   const handleSave = () => {
     if (!exercise) return;
     triggerHaptic([100, 50, 100]);
-    const newEntry: Workout = { id: crypto.randomUUID(), exercise: exercise.trim(), category, equipment, weight: Number(weight) || 0, sets: Number(sets) || 0, reps: Number(reps) || 0, date: new Date().toISOString() };
-    const updatedHistory = [...history, newEntry];
+    
+    const normalize = (str: string) => str.toLowerCase().trim().replace(/s$/, "");
+    const currentNorm = normalize(exercise);
+    
+    // Look to see if we already saved this exact exercise today
+    const existingTodayIndex = history.findIndex(
+      (entry) => isToday(entry.date) && normalize(entry.exercise) === currentNorm
+    );
+
+    let updatedHistory;
+
+    if (existingTodayIndex >= 0) {
+      // OVERRIDE MODE: Update the existing entry for today instead of creating a duplicate
+      updatedHistory = [...history];
+      updatedHistory[existingTodayIndex] = {
+        ...updatedHistory[existingTodayIndex],
+        category,
+        equipment,
+        weight: Number(weight) || 0,
+        sets: Number(sets) || 0,
+        reps: Number(reps) || 0,
+        date: new Date().toISOString() // refresh the timestamp
+      };
+    } else {
+      // NEW SET MODE
+      const newEntry: Workout = { id: crypto.randomUUID(), exercise: exercise.trim(), category, equipment, weight: Number(weight) || 0, sets: Number(sets) || 0, reps: Number(reps) || 0, date: new Date().toISOString() };
+      updatedHistory = [...history, newEntry];
+    }
+
     setHistory(updatedHistory);
     localStorage.setItem("boutiqueGymHistory", JSON.stringify(updatedHistory));
-    setExercise(""); setWeight(""); setSets(""); setReps(""); setSuccessMode(false); setIsSaved(true);
+    
+    setExercise(""); setWeight(""); setSets(""); setReps(""); 
+    setSuccessMode(false); setIsSaved(true);
     setTimeout(() => setIsSaved(false), 1500);
   };
 
@@ -167,12 +233,14 @@ export default function GymTracker() {
         const csvText = e.target?.result as string;
         const lines = csvText.replace(/\r/g, '').split('\n').filter(line => line.trim().length > 0);
         if (lines.length < 2) throw new Error("File is empty or missing headers");
+
         const separator = lines[0].includes(';') ? ';' : ',';
         const importedWorkouts: Workout[] = [];
 
         for (let i = 1; i < lines.length; i++) {
           const parts = lines[i].split(separator);
           if (parts.length < 7) continue;
+
           const [dateStr, exercise, category, equipment, weightStr, setsStr, repsStr] = parts;
           
           const safeId = typeof crypto !== 'undefined' && crypto.randomUUID 
@@ -266,13 +334,24 @@ export default function GymTracker() {
           <p className="text-sm text-gray-400">Log your workout, track your progress.</p>
         </div>
 
-        {lastRecord && (
+        {/* DYNAMIC CARD: TODAY'S SESSION vs LAST TIME */}
+        {todayRecord ? (
+          <div className="p-6 rounded-3xl transition-all duration-300 bg-[#E8B4B8]/10 border border-[#E8B4B8]/40 shadow-sm">
+            <div className="flex justify-between items-center mb-1">
+              <p className="text-xs uppercase tracking-widest text-[#E8B4B8] font-bold">Today's Log ({getEquipmentLabel(todayRecord.equipment)})</p>
+              <span className="text-[9px] bg-[#E8B4B8] text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Active</span>
+            </div>
+            <p className="text-xl font-medium text-gray-800">{todayRecord.weight > 0 ? `${todayRecord.weight}kg for ` : ""}{todayRecord.sets} × {todayRecord.reps}</p>
+            <p className="mt-1 text-[10px] font-semibold text-[#E8B4B8]/80 uppercase tracking-widest">Updating will override this entry</p>
+            {renderGraph()}
+          </div>
+        ) : lastRecord ? (
           <div className={`p-6 rounded-3xl transition-all duration-300 ${successMode ? "bg-[#A9C2A3]/10 border border-[#A9C2A3]/50" : "bg-white border border-gray-100 shadow-sm"}`}>
             <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">Last Time ({getEquipmentLabel(lastRecord.equipment)})</p>
             <p className="text-xl font-medium text-gray-700">{lastRecord.weight > 0 ? `${lastRecord.weight}kg for ` : ""}{lastRecord.sets} × {lastRecord.reps}</p>
             {renderGraph()}
           </div>
-        )}
+        ) : null}
 
         <div className="space-y-6">
           <div className="flex flex-col space-y-3">
@@ -319,8 +398,9 @@ export default function GymTracker() {
           </div>
         </div>
 
+        {/* DYNAMIC SAVE BUTTON */}
         <button onClick={handleSave} disabled={!exercise || isSaved} className={`w-full mt-4 min-h-[60px] rounded-xl text-lg font-medium tracking-wide transition-all ${isSaved ? "bg-[#A9C2A3] text-white" : "bg-[#E8B4B8] text-white shadow-sm disabled:opacity-40"}`}>
-          {isSaved ? "✓ Saved" : "Save Set"}
+          {isSaved ? "✓ Saved" : (todayRecord ? "UPDATE SET" : "SAVE SET")}
         </button>
 
         <div className="pt-8 border-t border-gray-100 space-y-6">
