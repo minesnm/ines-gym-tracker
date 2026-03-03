@@ -99,7 +99,6 @@ export default function GymTracker() {
 
   const triggerHaptic = (pattern: number | number[]) => { if (typeof window !== "undefined" && window.navigator?.vibrate) window.navigator.vibrate(pattern); };
   
-  // FIXED: Strict types applied here
   const handleIncrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { 
     triggerHaptic(30); 
     setter(typeof val === "number" ? val + 1 : 1); 
@@ -110,7 +109,6 @@ export default function GymTracker() {
     setter(typeof val === "number" && val > 0 ? val - 1 : 0); 
   };
 
-  // FIXED: Strict category types applied here
   const handleSelectPastExercise = (exName: string, cat: "upper" | "lower" | "core") => {
     triggerHaptic(20); setExercise(exName); setCategory(cat);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
@@ -168,7 +166,7 @@ export default function GymTracker() {
             localStorage.setItem("boutiqueGymHistory", JSON.stringify(imported));
           }
         }
-      } catch { // FIXED: Removed the unused 'err' variable here
+      } catch {
         alert("Please use a valid JSON backup file for imports."); 
       }
     };
