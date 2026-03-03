@@ -54,7 +54,7 @@ export default function GymTracker() {
     core: Array.from(new Set(history.filter((item) => item.category === "core").map((item) => item.exercise))).reverse(),
   };
 
-  const equipmentMap = new Map();
+  const equipmentMap = new Map<string, string>();
   history.forEach((entry) => { equipmentMap.set(entry.exercise, entry.equipment || "free"); });
 
   const exercisesToday = new Set(history.filter((item) => isToday(item.date)).map((item) => item.exercise));
@@ -99,7 +99,7 @@ export default function GymTracker() {
 
   const triggerHaptic = (pattern: number | number[]) => { if (typeof window !== "undefined" && window.navigator?.vibrate) window.navigator.vibrate(pattern); };
   
-  // FIXED: Removed 'any' and applied strict React types
+  // FIXED: Strict types applied here
   const handleIncrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { 
     triggerHaptic(30); 
     setter(typeof val === "number" ? val + 1 : 1); 
@@ -110,7 +110,7 @@ export default function GymTracker() {
     setter(typeof val === "number" && val > 0 ? val - 1 : 0); 
   };
 
-  // FIXED: Applied strictly defined category type instead of 'any'
+  // FIXED: Strict category types applied here
   const handleSelectPastExercise = (exName: string, cat: "upper" | "lower" | "core") => {
     triggerHaptic(20); setExercise(exName); setCategory(cat);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
@@ -168,8 +168,7 @@ export default function GymTracker() {
             localStorage.setItem("boutiqueGymHistory", JSON.stringify(imported));
           }
         }
-      // FIXED: Removed the unused 'err' variable from the catch block
-      } catch { 
+      } catch { // FIXED: Removed the unused 'err' variable here
         alert("Please use a valid JSON backup file for imports."); 
       }
     };
@@ -266,7 +265,6 @@ export default function GymTracker() {
           ))}
         </div>
 
-        {/* BOTTOM UTILITY BAR */}
         <div className="pt-12 flex justify-center items-center space-x-6 opacity-30 hover:opacity-100 transition-opacity">
           <input type="file" accept=".json" onChange={importData} ref={fileInputRef} className="hidden" />
           <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800">↑ Import</button>
