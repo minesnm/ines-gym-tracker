@@ -32,7 +32,7 @@ export default function GymTracker() {
   
   const [isSaved, setIsSaved] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
-  const [selectedHeatmapDate, setSelectedHeatmapDate] = useState<string | null>(null); // NEW: Mobile tap info
+  const [selectedHeatmapDate, setSelectedHeatmapDate] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const todayStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
@@ -127,9 +127,10 @@ export default function GymTracker() {
         }
       });
       
+      // FIXED: Removed the unused 'ts' variable by skipping the first array element
       const chartPoints = Array.from(dailyMaxMap.entries())
         .sort((a, b) => a[0] - b[0]) 
-        .map(([ts, data]) => ({ date: data.dateStr, maxWeight: data.maxWeight }))
+        .map(([, data]) => ({ date: data.dateStr, maxWeight: data.maxWeight }))
         .slice(-7);
         
       setChartData(chartPoints);
@@ -211,7 +212,6 @@ export default function GymTracker() {
     setExercise(""); setWeight(""); setSets(""); setReps(""); 
     setSuccessMode(false); setIsPR(false); setIsSaved(true);
     
-    // Automatically open the heatmap so they can see their new logged day!
     setShowHeatmap(true);
     
     setTimeout(() => setIsSaved(false), 1500);
@@ -273,7 +273,8 @@ export default function GymTracker() {
           triggerHaptic([50, 100, 50]);
         }
         if (fileInputRef.current) fileInputRef.current.value = '';
-      } catch (error) { alert("Import failed. The CSV file might be corrupted."); }
+      // FIXED: Removed the unused 'error' variable here
+      } catch { alert("Import failed. The CSV file might be corrupted."); }
     };
     reader.readAsText(file);
   };
@@ -328,7 +329,8 @@ export default function GymTracker() {
     startDate.setDate(today.getDate() - diffToMonday - 21);
 
     const days = [];
-    let current = new Date(startDate);
+    // FIXED: Changed `let` to `const` because we mutate the Date object instead of reassigning it
+    const current = new Date(startDate);
     while (current <= today) {
       days.push(new Date(current));
       current.setDate(current.getDate() + 1);
@@ -379,7 +381,6 @@ export default function GymTracker() {
           </div>
         </div>
 
-        {/* MOBILE-FRIENDLY TAP INFO */}
         <div className="h-4 mt-4 flex items-center justify-center">
            <p className={`text-[9px] font-bold uppercase tracking-widest transition-opacity ${selectedHeatmapDate ? 'text-[#E8B4B8]' : 'text-gray-300'}`}>
              {selectedHeatmapDate || "Tap a square for details"}
@@ -528,7 +529,6 @@ export default function GymTracker() {
             </div>
           ))}
 
-          {/* TOGGLEABLE HEATMAP BUTTON */}
           <div className="flex justify-center pt-6 pb-2">
              <button onClick={() => setShowHeatmap(!showHeatmap)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
                {showHeatmap ? "Hide Heatmap" : "📊 Show Heatmap"}
