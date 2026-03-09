@@ -20,12 +20,18 @@ export default function GymTracker() {
   const [weight, setWeight] = useState<number | "">(20);
   const [sets, setSets] = useState<number | "">(3);
   const [reps, setReps] = useState<number | "">(10);
+  
   const [history, setHistory] = useState<Workout[]>([]);
   const [lastRecord, setLastRecord] = useState<Workout | null>(null);
   const [todayRecord, setTodayRecord] = useState<Workout | null>(null); 
+  const [maxHistoricalWeight, setMaxHistoricalWeight] = useState<number>(0);
+  
   const [successMode, setSuccessMode] = useState(false);
+  const [isPR, setIsPR] = useState(false);
   const [chartData, setChartData] = useState<{ date: string; maxWeight: number }[]>([]);
+  
   const [isSaved, setIsSaved] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const todayStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
@@ -63,7 +69,6 @@ export default function GymTracker() {
 
   const equipmentMap = new Map<string, string>();
   history.forEach((entry) => { equipmentMap.set(entry.exercise, entry.equipment || "free"); });
-
   const exercisesToday = new Set(history.filter((item) => isToday(item.date)).map((item) => item.exercise));
 
   const getEquipmentIcon = (eq?: string) => {
@@ -71,7 +76,6 @@ export default function GymTracker() {
     if (eq === "bodyweight") return "💪";
     return "🏋️";
   };
-
   const getEquipmentLabel = (eq: string) => {
     if (eq === "machine") return "Machine";
     if (eq === "bodyweight") return "Body";
@@ -82,6 +86,7 @@ export default function GymTracker() {
     if (exercise.trim().length < 2) { 
       setLastRecord(null); 
       setTodayRecord(null);
+      setMaxHistoricalWeight(0);
       setChartData([]); 
       return; 
     }
@@ -91,8 +96,11 @@ export default function GymTracker() {
     const matches = history.filter((entry) => normalize(entry.exercise) === currentNorm);
 
     if (matches.length > 0) {
+      // Find historical max for PR calculation
+      const maxW = Math.max(...matches.map(m => m.weight));
+      setMaxHistoricalWeight(maxW);
+
       const sortedByDate = [...matches].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
       const tRecord = sortedByDate.find(entry => isToday(entry.date)) || null;
       const pastRecords = sortedByDate.filter((entry) => !isToday(entry.date));
       const lRecord = pastRecords.length > 0 ? pastRecords[0] : null;
@@ -106,29 +114,45 @@ export default function GymTracker() {
         setEquipment(refRecord.equipment || "free");
       }
       
-      const dailyMaxMap = new Map<string, number>();
-      [...matches].reverse().forEach((entry) => {
+      // FIXED: Graph is now strictly sorted chronologically (oldest to newest)
+      const dailyMaxMap = new Map<number, { dateStr: string, maxWeight: number }>();
+      matches.forEach((entry) => {
         const dateObj = new Date(entry.date);
-        const day = dateObj.getDate();
-        const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-        const dateStr = `${day}/${month}`;
+        dateObj.setHours(0, 0, 0, 0); // Normalize to midnight
+        const ts = dateObj.getTime();
         
-        if (!dailyMaxMap.has(dateStr) || (dailyMaxMap.get(dateStr) || 0) < entry.weight) dailyMaxMap.set(dateStr, entry.weight);
+        if (!dailyMaxMap.has(ts) || dailyMaxMap.get(ts)!.maxWeight < entry.weight) {
+          const day = dateObj.getDate();
+          const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+          dailyMaxMap.set(ts, { dateStr: `${day}/${month}`, maxWeight: entry.weight });
+        }
       });
       
-      setChartData(Array.from(dailyMaxMap, ([date, maxWeight]) => ({ date, maxWeight })).slice(-7));
+      const chartPoints = Array.from(dailyMaxMap.entries())
+        .sort((a, b) => a[0] - b[0]) // Sort timestamps ascending
+        .map(([ts, data]) => ({ date: data.dateStr, maxWeight: data.maxWeight }))
+        .slice(-7);
+        
+      setChartData(chartPoints);
     } else { 
       setLastRecord(null); 
       setTodayRecord(null);
+      setMaxHistoricalWeight(0);
       setChartData([]); 
     }
   }, [exercise, history]);
 
+  // UI STATE: Success vs PR
   useEffect(() => {
+    const w = typeof weight === "number" ? weight : 0;
+    const s = typeof sets === "number" ? sets : 0;
+    const r = typeof reps === "number" ? reps : 0;
+
+    // Check PR
+    setIsPR(w > maxHistoricalWeight && maxHistoricalWeight > 0);
+
+    // Check standard progress
     if (lastRecord) {
-      const w = typeof weight === "number" ? weight : 0;
-      const s = typeof sets === "number" ? sets : 0;
-      const r = typeof reps === "number" ? reps : 0;
       setSuccessMode(
         w > lastRecord.weight || 
         (w === lastRecord.weight && s > lastRecord.sets) || 
@@ -137,14 +161,13 @@ export default function GymTracker() {
     } else {
       setSuccessMode(false);
     }
-  }, [weight, sets, reps, lastRecord]);
+  }, [weight, sets, reps, lastRecord, maxHistoricalWeight]);
 
   const triggerHaptic = (pattern: number | number[]) => { if (typeof window !== "undefined" && window.navigator?.vibrate) window.navigator.vibrate(pattern); };
   
   const handleIncrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { 
     triggerHaptic(30); setter(typeof val === "number" ? val + 1 : 1); 
   };
-  
   const handleDecrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { 
     triggerHaptic(30); setter(typeof val === "number" && val > 0 ? val - 1 : 0); 
   };
@@ -177,12 +200,8 @@ export default function GymTracker() {
     if (existingTodayIndex >= 0) {
       updatedHistory = [...history];
       updatedHistory[existingTodayIndex] = {
-        ...updatedHistory[existingTodayIndex],
-        category,
-        equipment,
-        weight: Number(weight) || 0,
-        sets: Number(sets) || 0,
-        reps: Number(reps) || 0,
+        ...updatedHistory[existingTodayIndex], category, equipment,
+        weight: Number(weight) || 0, sets: Number(sets) || 0, reps: Number(reps) || 0,
         date: new Date().toISOString() 
       };
     } else {
@@ -194,7 +213,7 @@ export default function GymTracker() {
     localStorage.setItem("boutiqueGymHistory", JSON.stringify(updatedHistory));
     
     setExercise(""); setWeight(""); setSets(""); setReps(""); 
-    setSuccessMode(false); setIsSaved(true);
+    setSuccessMode(false); setIsPR(false); setIsSaved(true);
     setTimeout(() => setIsSaved(false), 1500);
   };
 
@@ -222,7 +241,7 @@ export default function GymTracker() {
       try {
         const csvText = e.target?.result as string;
         const lines = csvText.replace(/\r/g, '').split('\n').filter(line => line.trim().length > 0);
-        if (lines.length < 2) throw new Error("File is empty or missing headers");
+        if (lines.length < 2) throw new Error("File is empty");
 
         const separator = lines[0].includes(';') ? ';' : ',';
         const importedWorkouts: Workout[] = [];
@@ -232,7 +251,6 @@ export default function GymTracker() {
           if (parts.length < 7) continue;
 
           const [dateStr, exercise, category, equipment, weightStr, setsStr, repsStr] = parts;
-          
           const safeId = typeof crypto !== 'undefined' && crypto.randomUUID 
             ? crypto.randomUUID() 
             : Date.now().toString(36) + Math.random().toString(36).substring(2);
@@ -242,31 +260,20 @@ export default function GymTracker() {
           if (!isNaN(parsed.getTime())) parsedDate = parsed;
 
           importedWorkouts.push({
-            id: safeId,
-            date: parsedDate.toISOString(),
-            exercise: exercise?.trim() || "Unknown",
+            id: safeId, date: parsedDate.toISOString(), exercise: exercise?.trim() || "Unknown",
             category: (category?.trim() || "lower") as "upper" | "lower" | "core",
             equipment: (equipment?.trim() || "free") as "free" | "machine" | "bodyweight",
-            weight: Number(weightStr) || 0,
-            sets: Number(setsStr) || 0,
-            reps: Number(repsStr) || 0,
+            weight: Number(weightStr) || 0, sets: Number(setsStr) || 0, reps: Number(repsStr) || 0,
           });
         }
 
-        if (importedWorkouts.length > 0) {
-          if (confirm(`Successfully parsed ${importedWorkouts.length} records. Overwrite your current history?`)) {
-            setHistory(importedWorkouts);
-            localStorage.setItem("boutiqueGymHistory", JSON.stringify(importedWorkouts));
-            triggerHaptic([50, 100, 50]);
-          }
-        } else {
-          alert("Could not find any readable records in that CSV.");
+        if (importedWorkouts.length > 0 && confirm(`Successfully parsed ${importedWorkouts.length} records. Overwrite your current history?`)) {
+          setHistory(importedWorkouts);
+          localStorage.setItem("boutiqueGymHistory", JSON.stringify(importedWorkouts));
+          triggerHaptic([50, 100, 50]);
         }
         if (fileInputRef.current) fileInputRef.current.value = '';
-      } catch (error) {
-        console.error(error);
-        alert("Import failed. The CSV file might be corrupted."); 
-      }
+      } catch (error) { alert("Import failed. The CSV file might be corrupted."); }
     };
     reader.readAsText(file);
   };
@@ -275,13 +282,9 @@ export default function GymTracker() {
 
   const renderGraph = () => {
     if (chartData.length < 2) return null;
-    const width = 300;
-    const height = 90; 
-    const paddingX = 20; 
-    const paddingY = 25; 
+    const width = 300; const height = 90; const paddingX = 20; const paddingY = 25; 
     const weights = chartData.map((d) => d.maxWeight);
-    const maxW = Math.max(...weights);
-    const minW = Math.min(...weights);
+    const maxW = Math.max(...weights); const minW = Math.min(...weights);
     const yRange = maxW === minW ? 1 : maxW - minW;
 
     const points = chartData.map((data, i) => {
@@ -293,7 +296,7 @@ export default function GymTracker() {
     const pathD = `M ${points.map((p) => `${p.x} ${p.y}`).join(" L ")}`;
 
     return (
-      <div className="mt-5 pt-4 border-t border-gray-100">
+      <div className="mt-5 pt-4 border-t border-gray-100/50">
         <div className="flex justify-between items-center mb-4">
           <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Progression</p>
           <p className="text-[10px] uppercase tracking-widest font-bold text-[#A9C2A3]">Trend</p>
@@ -302,19 +305,71 @@ export default function GymTracker() {
           <path d={pathD} fill="none" stroke="#A9C2A3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-50" />
           {points.map((p, i) => (
             <g key={i}>
-              <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fontWeight="bold" fill="#4B5563">
-                {p.maxWeight > 0 ? `${p.maxWeight}` : "BW"}
-              </text>
+              <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fontWeight="bold" fill="#4B5563">{p.maxWeight > 0 ? `${p.maxWeight}` : "BW"}</text>
               <circle cx={p.x} cy={p.y} r="4" fill="#E8B4B8" stroke="white" strokeWidth="1.5" />
-              <text x={p.x} y={height - 2} textAnchor="middle" fontSize="9" fill="#9CA3AF" fontWeight="600">
-                {p.date}
-              </text>
+              <text x={p.x} y={height - 2} textAnchor="middle" fontSize="9" fill="#9CA3AF" fontWeight="600">{p.date}</text>
             </g>
           ))}
         </svg>
       </div>
     );
   };
+
+  const renderHeatmap = () => {
+    if (!showHeatmap) return null;
+    
+    const days = [];
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    for(let i = 27; i >= 0; i--) {
+      days.push(new Date(today.getTime() - i * 24*60*60*1000));
+    }
+    
+    const counts = new Map<number, number>();
+    history.forEach(h => {
+      const d = new Date(h.date);
+      d.setHours(0,0,0,0);
+      const ts = d.getTime();
+      counts.set(ts, (counts.get(ts) || 0) + 1);
+    });
+
+    return (
+      <div className="mt-4 p-5 bg-gray-50/50 rounded-3xl border border-gray-100 flex flex-col items-center shadow-sm">
+        <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">Last 28 Days</p>
+        <div className="flex gap-2 flex-wrap justify-center max-w-[260px]">
+          {days.map(d => {
+            const count = counts.get(d.getTime()) || 0;
+            let bg = "bg-gray-200/40"; 
+            if (count > 0 && count <= 2) bg = "bg-[#A9C2A3]/50"; 
+            if (count >= 3) bg = "bg-[#A9C2A3]"; 
+            return <div key={d.getTime()} className={`w-6 h-6 rounded-md ${bg}`} />
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // UI LOGIC FOR DYNAMIC CARDS
+  const displayRecord = todayRecord || lastRecord;
+  let cardBorder = "border-gray-100";
+  let cardBg = "bg-white";
+  let badge = null;
+
+  if (displayRecord) {
+    if (todayRecord && !isPR && !successMode) {
+      badge = <span className="text-[9px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Active</span>;
+    }
+    
+    if (isPR) {
+      cardBorder = "border-[#E8B4B8] border-2";
+      cardBg = "bg-[#E8B4B8]/10";
+      badge = <span className="text-[10px] bg-[#E8B4B8] text-white px-2.5 py-0.5 rounded-full font-bold uppercase tracking-widest animate-pulse shadow-sm">✨ New PR</span>;
+    } else if (successMode) {
+      cardBorder = "border-[#A9C2A3] border-2";
+      cardBg = "bg-[#A9C2A3]/15";
+      badge = <span className="text-[10px] bg-[#A9C2A3] text-white px-2.5 py-0.5 rounded-full font-bold uppercase tracking-widest shadow-sm">📈 Progress</span>;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-white text-gray-700 p-6 font-sans flex flex-col items-center pt-12 pb-20">
@@ -324,30 +379,24 @@ export default function GymTracker() {
           <p className="text-sm text-gray-400">Log your workout, track your progress.</p>
         </div>
 
-        {/* DYNAMIC CARD: TODAY'S SESSION vs LAST TIME */}
-        {todayRecord ? (
-          <div className="p-6 rounded-3xl transition-all duration-300 bg-[#E8B4B8]/10 border border-[#E8B4B8]/40 shadow-sm">
+        {displayRecord && (
+          <div className={`p-6 rounded-3xl transition-all duration-300 shadow-sm border ${cardBorder} ${cardBg}`}>
             <div className="flex justify-between items-center mb-1">
-              <p className="text-xs uppercase tracking-widest text-[#E8B4B8] font-bold">Today&apos;s Log ({getEquipmentLabel(todayRecord.equipment)})</p>
-              <span className="text-[9px] bg-[#E8B4B8] text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Active</span>
+              <p className={`text-xs uppercase tracking-widest font-bold ${isPR ? 'text-[#dca4a8]' : (successMode ? 'text-[#7A9374]' : 'text-gray-400')}`}>
+                {todayRecord ? "Today's Log" : "Last Time"} ({getEquipmentLabel(displayRecord.equipment)})
+              </p>
+              {badge}
             </div>
             <p className="text-xl font-medium text-gray-800">
-              {todayRecord.weight > 0 ? `${todayRecord.weight}kg ` : ""}
-              {todayRecord.reps} × {todayRecord.sets}
+              {displayRecord.weight > 0 ? `${displayRecord.weight}kg ` : ""}
+              {displayRecord.reps} × {displayRecord.sets}
             </p>
-            <p className="mt-1 text-[10px] font-semibold text-[#E8B4B8]/80 uppercase tracking-widest">Updating will override this entry</p>
+            {todayRecord && !isPR && !successMode && (
+              <p className="mt-1 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Updating will override this entry</p>
+            )}
             {renderGraph()}
           </div>
-        ) : lastRecord ? (
-          <div className={`p-6 rounded-3xl transition-all duration-300 ${successMode ? "bg-[#A9C2A3]/10 border border-[#A9C2A3]/50" : "bg-white border border-gray-100 shadow-sm"}`}>
-            <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">Last Time ({getEquipmentLabel(lastRecord.equipment)})</p>
-            <p className="text-xl font-medium text-gray-700">
-              {lastRecord.weight > 0 ? `${lastRecord.weight}kg ` : ""}
-              {lastRecord.reps} × {lastRecord.sets}
-            </p>
-            {renderGraph()}
-          </div>
-        ) : null}
+        )}
 
         <div className="space-y-6">
           <div className="flex flex-col space-y-3">
@@ -358,7 +407,6 @@ export default function GymTracker() {
             </div>
             <div className="flex space-x-2">
               <input type="text" placeholder="e.g., Leg Press" value={exercise} onChange={(e) => setExercise(e.target.value)} className="flex-1 bg-gray-50/50 border border-gray-200 rounded-xl p-4 outline-none focus:border-[#E8B4B8] text-lg" />
-              {/* FIXED: Removed the .slice(0, 4) so the full word displays */}
               <button onClick={() => { triggerHaptic(20); setEquipment(equipment === "free" ? "machine" : equipment === "machine" ? "bodyweight" : "free"); }} className="w-[64px] bg-gray-50 border border-gray-200 rounded-xl flex flex-col items-center justify-center">
                 <span className="text-xl mb-0.5">{getEquipmentIcon(equipment)}</span>
                 <span className="text-[7px] uppercase tracking-widest text-gray-400 font-bold">{getEquipmentLabel(equipment)}</span>
@@ -400,7 +448,7 @@ export default function GymTracker() {
           {isSaved ? "✓ Saved" : (todayRecord ? "UPDATE SET" : "SAVE SET")}
         </button>
 
-        <div className="pt-8 border-t border-gray-100 space-y-6">
+        <div className="pt-8 border-t border-gray-100 space-y-4">
           <div className="text-center space-y-2">
             <h2 className="text-xs uppercase tracking-[0.2em] text-gray-400">Today&apos;s Plan & History</h2>
             <div className="flex justify-center space-x-3 text-[10px] font-bold uppercase tracking-widest">
@@ -413,7 +461,7 @@ export default function GymTracker() {
           </div>
 
           {(["lower", "upper", "core"] as const).map((cat) => groupedExercises[cat].length > 0 && (
-            <div key={cat} className="space-y-2">
+            <div key={cat} className="space-y-2 mt-4">
               <p className="text-[10px] text-gray-300 font-semibold uppercase tracking-wider ml-1">{cat} Body</p>
               <div className="flex flex-wrap gap-2">
                 {groupedExercises[cat].map((ex, i) => (
@@ -425,6 +473,15 @@ export default function GymTracker() {
               </div>
             </div>
           ))}
+
+          {/* TOGGLEABLE HEATMAP */}
+          <div className="flex justify-center pt-4">
+             <button onClick={() => setShowHeatmap(!showHeatmap)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 px-4 py-2 rounded-full">
+               {showHeatmap ? "Hide" : "Show"} Consistency Heatmap
+             </button>
+          </div>
+          {renderHeatmap()}
+
         </div>
 
         <div className="pt-12 flex justify-center items-center space-x-6 opacity-30 hover:opacity-100 transition-opacity">
