@@ -96,7 +96,6 @@ export default function GymTracker() {
     const matches = history.filter((entry) => normalize(entry.exercise) === currentNorm);
 
     if (matches.length > 0) {
-      // Find historical max for PR calculation
       const maxW = Math.max(...matches.map(m => m.weight));
       setMaxHistoricalWeight(maxW);
 
@@ -114,11 +113,10 @@ export default function GymTracker() {
         setEquipment(refRecord.equipment || "free");
       }
       
-      // FIXED: Graph is now strictly sorted chronologically (oldest to newest)
       const dailyMaxMap = new Map<number, { dateStr: string, maxWeight: number }>();
       matches.forEach((entry) => {
         const dateObj = new Date(entry.date);
-        dateObj.setHours(0, 0, 0, 0); // Normalize to midnight
+        dateObj.setHours(0, 0, 0, 0); 
         const ts = dateObj.getTime();
         
         if (!dailyMaxMap.has(ts) || dailyMaxMap.get(ts)!.maxWeight < entry.weight) {
@@ -129,7 +127,7 @@ export default function GymTracker() {
       });
       
       const chartPoints = Array.from(dailyMaxMap.entries())
-        .sort((a, b) => a[0] - b[0]) // Sort timestamps ascending
+        .sort((a, b) => a[0] - b[0]) 
         .map(([ts, data]) => ({ date: data.dateStr, maxWeight: data.maxWeight }))
         .slice(-7);
         
@@ -142,16 +140,13 @@ export default function GymTracker() {
     }
   }, [exercise, history]);
 
-  // UI STATE: Success vs PR
   useEffect(() => {
     const w = typeof weight === "number" ? weight : 0;
     const s = typeof sets === "number" ? sets : 0;
     const r = typeof reps === "number" ? reps : 0;
 
-    // Check PR
     setIsPR(w > maxHistoricalWeight && maxHistoricalWeight > 0);
 
-    // Check standard progress
     if (lastRecord) {
       setSuccessMode(
         w > lastRecord.weight || 
@@ -315,14 +310,26 @@ export default function GymTracker() {
     );
   };
 
+  // --- NEW: INTELLIGENT HEATMAP GRID ---
   const renderHeatmap = () => {
     if (!showHeatmap) return null;
     
-    const days = [];
     const today = new Date();
     today.setHours(0,0,0,0);
-    for(let i = 27; i >= 0; i--) {
-      days.push(new Date(today.getTime() - i * 24*60*60*1000));
+    
+    // Find the Monday of this week
+    const dayOfWeek = today.getDay();
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 0 is Sunday
+    
+    // Start date is 3 weeks before this week's Monday (4 full weeks total)
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - diffToMonday - 21);
+
+    const days = [];
+    let current = new Date(startDate);
+    while (current <= today) {
+      days.push(new Date(current));
+      current.setDate(current.getDate() + 1);
     }
     
     const counts = new Map<number, number>();
@@ -334,16 +341,53 @@ export default function GymTracker() {
     });
 
     return (
-      <div className="mt-4 p-5 bg-gray-50/50 rounded-3xl border border-gray-100 flex flex-col items-center shadow-sm">
-        <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">Last 28 Days</p>
-        <div className="flex gap-2 flex-wrap justify-center max-w-[260px]">
-          {days.map(d => {
-            const count = counts.get(d.getTime()) || 0;
-            let bg = "bg-gray-200/40"; 
-            if (count > 0 && count <= 2) bg = "bg-[#A9C2A3]/50"; 
-            if (count >= 3) bg = "bg-[#A9C2A3]"; 
-            return <div key={d.getTime()} className={`w-6 h-6 rounded-md ${bg}`} />
-          })}
+      <div className="mt-4 p-5 bg-white rounded-3xl border border-gray-100 flex flex-col items-center shadow-sm w-full">
+        <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">4-Week Consistency</p>
+        
+        <div className="w-full max-w-[240px]">
+          {/* Day Headers */}
+          <div className="grid grid-cols-7 gap-2 mb-2 text-center">
+            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
+              <span key={i} className="text-[8px] font-bold text-gray-300">{day}</span>
+            ))}
+          </div>
+
+          {/* Grid Squares */}
+          <div className="grid grid-cols-7 gap-2">
+            {days.map(d => {
+              const ts = d.getTime();
+              const count = counts.get(ts) || 0;
+              const isToday = ts === today.getTime();
+              
+              let bg = "bg-gray-100/50"; 
+              if (count > 0 && count <= 2) bg = "bg-[#A9C2A3]/50"; 
+              if (count >= 3) bg = "bg-[#A9C2A3] shadow-sm"; 
+              
+              return (
+                <div 
+                  key={ts} 
+                  title={`${d.toLocaleDateString()}: ${count} items`}
+                  className={`w-full aspect-square rounded-[4px] ${bg} ${isToday ? 'ring-2 ring-offset-2 ring-[#E8B4B8]/50' : ''}`} 
+                />
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center justify-center space-x-4 mt-6 text-[8px] uppercase tracking-widest text-gray-400 font-bold w-full">
+          <div className="flex items-center space-x-1.5">
+            <div className="w-2.5 h-2.5 rounded-[2px] bg-gray-100/50"></div>
+            <span>Rest</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <div className="w-2.5 h-2.5 rounded-[2px] bg-[#A9C2A3]/50"></div>
+            <span>1-2</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <div className="w-2.5 h-2.5 rounded-[2px] bg-[#A9C2A3]"></div>
+            <span>3+ Items</span>
+          </div>
         </div>
       </div>
     );
@@ -357,7 +401,7 @@ export default function GymTracker() {
 
   if (displayRecord) {
     if (todayRecord && !isPR && !successMode) {
-      badge = <span className="text-[9px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Active</span>;
+      badge = <span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Active</span>;
     }
     
     if (isPR) {
@@ -475,9 +519,9 @@ export default function GymTracker() {
           ))}
 
           {/* TOGGLEABLE HEATMAP */}
-          <div className="flex justify-center pt-4">
-             <button onClick={() => setShowHeatmap(!showHeatmap)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 px-4 py-2 rounded-full">
-               {showHeatmap ? "Hide" : "Show"} Consistency Heatmap
+          <div className="flex justify-center pt-6 pb-2">
+             <button onClick={() => setShowHeatmap(!showHeatmap)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
+               {showHeatmap ? "Hide Heatmap" : "📊 Show Heatmap"}
              </button>
           </div>
           {renderHeatmap()}
