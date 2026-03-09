@@ -32,6 +32,7 @@ export default function GymTracker() {
   
   const [isSaved, setIsSaved] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [selectedHeatmapDate, setSelectedHeatmapDate] = useState<string | null>(null); // NEW: Mobile tap info
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const todayStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
@@ -209,6 +210,10 @@ export default function GymTracker() {
     
     setExercise(""); setWeight(""); setSets(""); setReps(""); 
     setSuccessMode(false); setIsPR(false); setIsSaved(true);
+    
+    // Automatically open the heatmap so they can see their new logged day!
+    setShowHeatmap(true);
+    
     setTimeout(() => setIsSaved(false), 1500);
   };
 
@@ -310,18 +315,15 @@ export default function GymTracker() {
     );
   };
 
-  // --- NEW: INTELLIGENT HEATMAP GRID ---
   const renderHeatmap = () => {
     if (!showHeatmap) return null;
     
     const today = new Date();
     today.setHours(0,0,0,0);
     
-    // Find the Monday of this week
     const dayOfWeek = today.getDay();
-    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 0 is Sunday
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; 
     
-    // Start date is 3 weeks before this week's Monday (4 full weeks total)
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - diffToMonday - 21);
 
@@ -341,18 +343,16 @@ export default function GymTracker() {
     });
 
     return (
-      <div className="mt-4 p-5 bg-white rounded-3xl border border-gray-100 flex flex-col items-center shadow-sm w-full">
+      <div className="mt-4 p-5 bg-white rounded-3xl border border-gray-100 flex flex-col items-center shadow-sm w-full transition-all">
         <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">4-Week Consistency</p>
         
         <div className="w-full max-w-[240px]">
-          {/* Day Headers */}
           <div className="grid grid-cols-7 gap-2 mb-2 text-center">
             {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
               <span key={i} className="text-[8px] font-bold text-gray-300">{day}</span>
             ))}
           </div>
 
-          {/* Grid Squares */}
           <div className="grid grid-cols-7 gap-2">
             {days.map(d => {
               const ts = d.getTime();
@@ -363,10 +363,15 @@ export default function GymTracker() {
               if (count > 0 && count <= 2) bg = "bg-[#A9C2A3]/50"; 
               if (count >= 3) bg = "bg-[#A9C2A3] shadow-sm"; 
               
+              const dateString = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              
               return (
-                <div 
+                <button 
                   key={ts} 
-                  title={`${d.toLocaleDateString()}: ${count} items`}
+                  onClick={() => {
+                    triggerHaptic(10);
+                    setSelectedHeatmapDate(`${dateString}: ${count} Workout${count === 1 ? '' : 's'}`);
+                  }}
                   className={`w-full aspect-square rounded-[4px] ${bg} ${isToday ? 'ring-2 ring-offset-2 ring-[#E8B4B8]/50' : ''}`} 
                 />
               )
@@ -374,8 +379,14 @@ export default function GymTracker() {
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center justify-center space-x-4 mt-6 text-[8px] uppercase tracking-widest text-gray-400 font-bold w-full">
+        {/* MOBILE-FRIENDLY TAP INFO */}
+        <div className="h-4 mt-4 flex items-center justify-center">
+           <p className={`text-[9px] font-bold uppercase tracking-widest transition-opacity ${selectedHeatmapDate ? 'text-[#E8B4B8]' : 'text-gray-300'}`}>
+             {selectedHeatmapDate || "Tap a square for details"}
+           </p>
+        </div>
+
+        <div className="flex items-center justify-center space-x-4 mt-4 text-[8px] uppercase tracking-widest text-gray-400 font-bold w-full border-t border-gray-50 pt-4">
           <div className="flex items-center space-x-1.5">
             <div className="w-2.5 h-2.5 rounded-[2px] bg-gray-100/50"></div>
             <span>Rest</span>
@@ -386,14 +397,13 @@ export default function GymTracker() {
           </div>
           <div className="flex items-center space-x-1.5">
             <div className="w-2.5 h-2.5 rounded-[2px] bg-[#A9C2A3]"></div>
-            <span>3+ Items</span>
+            <span>3+</span>
           </div>
         </div>
       </div>
     );
   };
 
-  // UI LOGIC FOR DYNAMIC CARDS
   const displayRecord = todayRecord || lastRecord;
   let cardBorder = "border-gray-100";
   let cardBg = "bg-white";
@@ -518,7 +528,7 @@ export default function GymTracker() {
             </div>
           ))}
 
-          {/* TOGGLEABLE HEATMAP */}
+          {/* TOGGLEABLE HEATMAP BUTTON */}
           <div className="flex justify-center pt-6 pb-2">
              <button onClick={() => setShowHeatmap(!showHeatmap)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
                {showHeatmap ? "Hide Heatmap" : "📊 Show Heatmap"}
