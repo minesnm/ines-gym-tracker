@@ -17,18 +17,20 @@ export default function GymTracker() {
   const [exercise, setExercise] = useState("");
   const [category, setCategory] = useState<"upper" | "lower" | "core">("lower");
   const [equipment, setEquipment] = useState<"free" | "machine" | "bodyweight">("free");
-  const [weight, setWeight] = useState<number | "">(20);
+  const [weight, setWeight] = useState<number | "">(30);
   const [sets, setSets] = useState<number | "">(3);
   const [reps, setReps] = useState<number | "">(10);
   
   const [history, setHistory] = useState<Workout[]>([]);
   const [lastRecord, setLastRecord] = useState<Workout | null>(null);
   const [todayRecord, setTodayRecord] = useState<Workout | null>(null); 
-  const [maxHistoricalWeight, setMaxHistoricalWeight] = useState<number>(0);
+  const [maxHistoricalScore, setMaxHistoricalScore] = useState<number>(0);
   
   const [successMode, setSuccessMode] = useState(false);
   const [isPR, setIsPR] = useState(false);
-  const [chartData, setChartData] = useState<{ date: string; maxWeight: number }[]>([]);
+  
+  // UPDATED: Chart now tracks the combined strength score and specific reps
+  const [chartData, setChartData] = useState<{ date: string; weight: number; reps: number; score: number }[]>([]);
   
   const [isSaved, setIsSaved] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -83,11 +85,17 @@ export default function GymTracker() {
     return "Weights";
   };
 
+  // THE NEW BRAIN: Calculates true progression using Epley's Estimated 1RM formula
+  const calculateScore = (w: number, r: number) => {
+    if (w === 0) return r; // For bodyweight, the score is just the reps
+    return w * (1 + r / 30); // Epley Formula
+  };
+
   useEffect(() => {
     if (exercise.trim().length < 2) { 
       setLastRecord(null); 
       setTodayRecord(null);
-      setMaxHistoricalWeight(0);
+      setMaxHistoricalScore(0);
       setChartData([]); 
       return; 
     }
@@ -97,8 +105,9 @@ export default function GymTracker() {
     const matches = history.filter((entry) => normalize(entry.exercise) === currentNorm);
 
     if (matches.length > 0) {
-      const maxW = Math.max(...matches.map(m => m.weight));
-      setMaxHistoricalWeight(maxW);
+      // Find historical max based on true strength score, not just raw weight
+      const maxScore = Math.max(...matches.map(m => calculateScore(m.weight, m.reps)));
+      setMaxHistoricalScore(maxScore);
 
       const sortedByDate = [...matches].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       const tRecord = sortedByDate.find(entry => isToday(entry.date)) || null;
@@ -114,30 +123,30 @@ export default function GymTracker() {
         setEquipment(refRecord.equipment || "free");
       }
       
-      const dailyMaxMap = new Map<number, { dateStr: string, maxWeight: number }>();
+      const dailyMaxMap = new Map<number, { dateStr: string, weight: number, reps: number, score: number }>();
       matches.forEach((entry) => {
         const dateObj = new Date(entry.date);
         dateObj.setHours(0, 0, 0, 0); 
         const ts = dateObj.getTime();
+        const score = calculateScore(entry.weight, entry.reps);
         
-        if (!dailyMaxMap.has(ts) || dailyMaxMap.get(ts)!.maxWeight < entry.weight) {
+        if (!dailyMaxMap.has(ts) || dailyMaxMap.get(ts)!.score < score) {
           const day = dateObj.getDate();
           const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-          dailyMaxMap.set(ts, { dateStr: `${day}/${month}`, maxWeight: entry.weight });
+          dailyMaxMap.set(ts, { dateStr: `${day}/${month}`, weight: entry.weight, reps: entry.reps, score });
         }
       });
       
-      // FIXED: Removed the unused 'ts' variable by skipping the first array element
       const chartPoints = Array.from(dailyMaxMap.entries())
         .sort((a, b) => a[0] - b[0]) 
-        .map(([, data]) => ({ date: data.dateStr, maxWeight: data.maxWeight }))
+        .map(([, data]) => ({ date: data.dateStr, weight: data.weight, reps: data.reps, score: data.score }))
         .slice(-7);
         
       setChartData(chartPoints);
     } else { 
       setLastRecord(null); 
       setTodayRecord(null);
-      setMaxHistoricalWeight(0);
+      setMaxHistoricalScore(0);
       setChartData([]); 
     }
   }, [exercise, history]);
@@ -147,8 +156,12 @@ export default function GymTracker() {
     const s = typeof sets === "number" ? sets : 0;
     const r = typeof reps === "number" ? reps : 0;
 
-    setIsPR(w > maxHistoricalWeight && maxHistoricalWeight > 0);
+    const currentScore = calculateScore(w, r);
 
+    // Is PR? (Beats their best ever estimated 1RM)
+    setIsPR(currentScore > maxHistoricalScore && maxHistoricalScore > 0);
+
+    // Is Progress? (Beats last session exactly)
     if (lastRecord) {
       setSuccessMode(
         w > lastRecord.weight || 
@@ -158,7 +171,7 @@ export default function GymTracker() {
     } else {
       setSuccessMode(false);
     }
-  }, [weight, sets, reps, lastRecord, maxHistoricalWeight]);
+  }, [weight, sets, reps, lastRecord, maxHistoricalScore]);
 
   const triggerHaptic = (pattern: number | number[]) => { if (typeof window !== "undefined" && window.navigator?.vibrate) window.navigator.vibrate(pattern); };
   
@@ -273,7 +286,6 @@ export default function GymTracker() {
           triggerHaptic([50, 100, 50]);
         }
         if (fileInputRef.current) fileInputRef.current.value = '';
-      // FIXED: Removed the unused 'error' variable here
       } catch { alert("Import failed. The CSV file might be corrupted."); }
     };
     reader.readAsText(file);
@@ -284,13 +296,13 @@ export default function GymTracker() {
   const renderGraph = () => {
     if (chartData.length < 2) return null;
     const width = 300; const height = 90; const paddingX = 20; const paddingY = 25; 
-    const weights = chartData.map((d) => d.maxWeight);
-    const maxW = Math.max(...weights); const minW = Math.min(...weights);
-    const yRange = maxW === minW ? 1 : maxW - minW;
+    const scores = chartData.map((d) => d.score);
+    const maxS = Math.max(...scores); const minS = Math.min(...scores);
+    const yRange = maxS === minS ? 1 : maxS - minS;
 
     const points = chartData.map((data, i) => {
       const x = paddingX + (i / (chartData.length - 1)) * (width - paddingX * 2);
-      const y = height - paddingY - ((data.maxWeight - minW) / yRange) * (height - paddingY * 2);
+      const y = height - paddingY - ((data.score - minS) / yRange) * (height - paddingY * 2);
       return { x, y, ...data };
     });
 
@@ -306,7 +318,9 @@ export default function GymTracker() {
           <path d={pathD} fill="none" stroke="#A9C2A3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-50" />
           {points.map((p, i) => (
             <g key={i}>
-              <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fontWeight="bold" fill="#4B5563">{p.maxWeight > 0 ? `${p.maxWeight}` : "BW"}</text>
+              <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="10" fontWeight="bold" fill="#4B5563">
+                {p.weight > 0 ? `${p.weight}x${p.reps}` : `${p.reps}r`}
+              </text>
               <circle cx={p.x} cy={p.y} r="4" fill="#E8B4B8" stroke="white" strokeWidth="1.5" />
               <text x={p.x} y={height - 2} textAnchor="middle" fontSize="9" fill="#9CA3AF" fontWeight="600">{p.date}</text>
             </g>
@@ -329,7 +343,6 @@ export default function GymTracker() {
     startDate.setDate(today.getDate() - diffToMonday - 21);
 
     const days = [];
-    // FIXED: Changed `let` to `const` because we mutate the Date object instead of reassigning it
     const current = new Date(startDate);
     while (current <= today) {
       days.push(new Date(current));
