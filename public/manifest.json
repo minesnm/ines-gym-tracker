@@ -1,15 +1,21 @@
 {
-  "short_name": "GymTracker",
-  "name": "Boutique Gym Tracker",
+  "short_name": "Gym",
+  "name": "Gym Tracker",
+  "description": "A minimalist, private workout and progression tracker.",
   "icons": [
     {
-      "src": "icon.png",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
   "theme_color": "#E8B4B8",
   "background_color": "#FFFFFF"
