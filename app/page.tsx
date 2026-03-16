@@ -28,8 +28,6 @@ export default function GymTracker() {
   
   const [successMode, setSuccessMode] = useState(false);
   const [isPR, setIsPR] = useState(false);
-  
-  // UPDATED: Chart now tracks the combined strength score and specific reps
   const [chartData, setChartData] = useState<{ date: string; weight: number; reps: number; score: number }[]>([]);
   
   const [isSaved, setIsSaved] = useState(false);
@@ -85,10 +83,9 @@ export default function GymTracker() {
     return "Weights";
   };
 
-  // THE NEW BRAIN: Calculates true progression using Epley's Estimated 1RM formula
   const calculateScore = (w: number, r: number) => {
-    if (w === 0) return r; // For bodyweight, the score is just the reps
-    return w * (1 + r / 30); // Epley Formula
+    if (w === 0) return r; 
+    return w * (1 + r / 30); 
   };
 
   useEffect(() => {
@@ -105,7 +102,6 @@ export default function GymTracker() {
     const matches = history.filter((entry) => normalize(entry.exercise) === currentNorm);
 
     if (matches.length > 0) {
-      // Find historical max based on true strength score, not just raw weight
       const maxScore = Math.max(...matches.map(m => calculateScore(m.weight, m.reps)));
       setMaxHistoricalScore(maxScore);
 
@@ -158,10 +154,8 @@ export default function GymTracker() {
 
     const currentScore = calculateScore(w, r);
 
-    // Is PR? (Beats their best ever estimated 1RM)
     setIsPR(currentScore > maxHistoricalScore && maxHistoricalScore > 0);
 
-    // Is Progress? (Beats last session exactly)
     if (lastRecord) {
       setSuccessMode(
         w > lastRecord.weight || 
@@ -336,82 +330,143 @@ export default function GymTracker() {
     const today = new Date();
     today.setHours(0,0,0,0);
     
+    // Find Monday of this week
     const dayOfWeek = today.getDay();
     const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; 
     
+    // Start date is exactly 3 weeks prior to this Monday
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - diffToMonday - 21);
 
+    // Generate exactly 28 days (4 full weeks)
     const days = [];
     const current = new Date(startDate);
-    while (current <= today) {
+    for (let i = 0; i < 28; i++) {
       days.push(new Date(current));
       current.setDate(current.getDate() + 1);
     }
     
-    const counts = new Map<number, number>();
-    history.forEach(h => {
-      const d = new Date(h.date);
+    const sortedHistory = [...history].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const lastSeenMap = new Map<string, Workout>();
+    const maxScoreMap = new Map<string, number>();
+    const dayStats = new Map<number, { total: number, progress: number }>();
+
+    sortedHistory.forEach(entry => {
+      const d = new Date(entry.date);
       d.setHours(0,0,0,0);
       const ts = d.getTime();
-      counts.set(ts, (counts.get(ts) || 0) + 1);
+      
+      if (!dayStats.has(ts)) dayStats.set(ts, { total: 0, progress: 0 });
+      const stats = dayStats.get(ts)!;
+      stats.total += 1;
+
+      const prev = lastSeenMap.get(entry.exercise);
+      const currentScore = calculateScore(entry.weight, entry.reps);
+      const maxScore = maxScoreMap.get(entry.exercise) || 0;
+
+      let madeProgress = false;
+      if (currentScore > maxScore && maxScore > 0) {
+        madeProgress = true;
+      } else if (prev) {
+        if (entry.weight > prev.weight || 
+           (entry.weight === prev.weight && entry.sets > prev.sets) || 
+           (entry.weight === prev.weight && entry.sets === prev.sets && entry.reps > prev.reps)) {
+          madeProgress = true;
+        }
+      }
+
+      if (madeProgress) stats.progress += 1;
+
+      lastSeenMap.set(entry.exercise, entry);
+      if (currentScore > maxScore) maxScoreMap.set(entry.exercise, currentScore);
     });
 
+    // Group the 28 days into 4 weeks
+    const weeks = [];
+    for (let i = 0; i < days.length; i += 7) {
+      weeks.push(days.slice(i, i + 7));
+    }
+    
     return (
       <div className="mt-4 p-5 bg-white rounded-3xl border border-gray-100 flex flex-col items-center shadow-sm w-full transition-all">
-        <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">4-Week Consistency</p>
+        <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">Progression Calendar</p>
         
-        <div className="w-full max-w-[240px]">
-          <div className="grid grid-cols-7 gap-2 mb-2 text-center">
-            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
-              <span key={i} className="text-[8px] font-bold text-gray-300">{day}</span>
-            ))}
+        <div className="w-full max-w-[280px]">
+          {/* Day Headers */}
+          <div className="flex mb-2">
+            <div className="w-10"></div> {/* Spacer for the date column */}
+            <div className="flex-1 grid grid-cols-7 gap-2 text-center">
+              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
+                <span key={i} className="text-[8px] font-bold text-gray-300">{day}</span>
+              ))}
+            </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
-            {days.map(d => {
-              const ts = d.getTime();
-              const count = counts.get(ts) || 0;
-              const isToday = ts === today.getTime();
-              
-              let bg = "bg-gray-100/50"; 
-              if (count > 0 && count <= 2) bg = "bg-[#A9C2A3]/50"; 
-              if (count >= 3) bg = "bg-[#A9C2A3] shadow-sm"; 
-              
-              const dateString = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-              
-              return (
-                <button 
-                  key={ts} 
-                  onClick={() => {
-                    triggerHaptic(10);
-                    setSelectedHeatmapDate(`${dateString}: ${count} Workout${count === 1 ? '' : 's'}`);
-                  }}
-                  className={`w-full aspect-square rounded-[4px] ${bg} ${isToday ? 'ring-2 ring-offset-2 ring-[#E8B4B8]/50' : ''}`} 
-                />
-              )
-            })}
-          </div>
+          {/* Weekly Rows */}
+          {weeks.map((week, wIndex) => {
+            // Get the short date format for the Monday of this week
+            const mondayLabel = week[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            
+            return (
+              <div key={wIndex} className="flex items-center mb-2">
+                {/* Clean Date Label (e.g., "Mar 2") */}
+                <div className="w-10 text-[8px] font-bold text-gray-400 text-right pr-2">
+                  {mondayLabel}
+                </div>
+                
+                {/* 7-Day Grid */}
+                <div className="flex-1 grid grid-cols-7 gap-2">
+                  {week.map(d => {
+                    const ts = d.getTime();
+                    const stats = dayStats.get(ts) || { total: 0, progress: 0 };
+                    const isToday = ts === today.getTime();
+                    const isFuture = ts > today.getTime();
+                    
+                    let bg = "bg-gray-100/50"; 
+                    if (stats.total > 0 && stats.progress === 0) bg = "bg-[#A9C2A3]/40"; 
+                    if (stats.progress > 0) bg = "bg-[#A9C2A3] shadow-sm"; 
+                    
+                    const dateString = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const infoLabel = stats.total === 0 ? "Rest Day" : `${stats.total} Logged • ${stats.progress} Progress`;
+                    
+                    return (
+                      <button 
+                        key={ts} 
+                        disabled={isFuture}
+                        onClick={() => {
+                          triggerHaptic(10);
+                          setSelectedHeatmapDate(`${dateString}: ${infoLabel}`);
+                        }}
+                        className={`w-full aspect-square rounded-[4px] transition-all ${bg} ${isToday ? 'ring-2 ring-offset-2 ring-[#E8B4B8]/50' : ''} ${isFuture ? 'opacity-20' : ''}`} 
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
-        <div className="h-4 mt-4 flex items-center justify-center">
+        {/* Tap Output */}
+        <div className="h-4 mt-3 flex items-center justify-center">
            <p className={`text-[9px] font-bold uppercase tracking-widest transition-opacity ${selectedHeatmapDate ? 'text-[#E8B4B8]' : 'text-gray-300'}`}>
              {selectedHeatmapDate || "Tap a square for details"}
            </p>
         </div>
 
-        <div className="flex items-center justify-center space-x-4 mt-4 text-[8px] uppercase tracking-widest text-gray-400 font-bold w-full border-t border-gray-50 pt-4">
+        {/* Dynamic Legend */}
+        <div className="flex items-center justify-center space-x-4 mt-3 text-[8px] uppercase tracking-widest text-gray-400 font-bold w-full border-t border-gray-50 pt-4">
           <div className="flex items-center space-x-1.5">
             <div className="w-2.5 h-2.5 rounded-[2px] bg-gray-100/50"></div>
             <span>Rest</span>
           </div>
           <div className="flex items-center space-x-1.5">
-            <div className="w-2.5 h-2.5 rounded-[2px] bg-[#A9C2A3]/50"></div>
-            <span>1-2</span>
+            <div className="w-2.5 h-2.5 rounded-[2px] bg-[#A9C2A3]/40"></div>
+            <span>Maintain</span>
           </div>
           <div className="flex items-center space-x-1.5">
             <div className="w-2.5 h-2.5 rounded-[2px] bg-[#A9C2A3]"></div>
-            <span>3+</span>
+            <span className="text-[#A9C2A3]">Progress</span>
           </div>
         </div>
       </div>
@@ -470,7 +525,7 @@ export default function GymTracker() {
           <div className="flex flex-col space-y-3">
             <div className="flex space-x-2">
               {(["upper", "lower", "core"] as const).map((cat) => (
-                <button key={cat} onClick={() => { setCategory(cat); triggerHaptic(20); }} className={`flex-1 py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-semibold transition-all duration-200 ${category === cat ? "bg-[#E8B4B8] text-white shadow-sm scale-[1.02]" : "bg-gray-50 text-gray-400 border border-gray-100"}`}>{cat}</button>
+                <button key={cat} onClick={() => { setCategory(cat); triggerHaptic(20); }} className={`flex-1 py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-semibold transition-all duration-200 ${category === gap ? "bg-[#E8B4B8] text-white shadow-sm scale-[1.02]" : "bg-gray-50 text-gray-400 border border-gray-100"}`}>{cat}</button>
               ))}
             </div>
             <div className="flex space-x-2">
@@ -544,7 +599,7 @@ export default function GymTracker() {
 
           <div className="flex justify-center pt-6 pb-2">
              <button onClick={() => setShowHeatmap(!showHeatmap)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
-               {showHeatmap ? "Hide Heatmap" : "📊 Show Heatmap"}
+               {showHeatmap ? "Hide Calendar" : "📊 Show Progression Calendar"}
              </button>
           </div>
           {renderHeatmap()}
