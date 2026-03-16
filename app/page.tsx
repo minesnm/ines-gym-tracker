@@ -330,15 +330,12 @@ export default function GymTracker() {
     const today = new Date();
     today.setHours(0,0,0,0);
     
-    // Find Monday of this week
     const dayOfWeek = today.getDay();
     const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; 
     
-    // Start date is exactly 3 weeks prior to this Monday
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - diffToMonday - 21);
 
-    // Generate exactly 28 days (4 full weeks)
     const days = [];
     const current = new Date(startDate);
     for (let i = 0; i < 28; i++) {
@@ -381,7 +378,6 @@ export default function GymTracker() {
       if (currentScore > maxScore) maxScoreMap.set(entry.exercise, currentScore);
     });
 
-    // Group the 28 days into 4 weeks
     const weeks = [];
     for (let i = 0; i < days.length; i += 7) {
       weeks.push(days.slice(i, i + 7));
@@ -392,9 +388,8 @@ export default function GymTracker() {
         <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">Progression Calendar</p>
         
         <div className="w-full max-w-[280px]">
-          {/* Day Headers */}
           <div className="flex mb-2">
-            <div className="w-10"></div> {/* Spacer for the date column */}
+            <div className="w-10"></div> 
             <div className="flex-1 grid grid-cols-7 gap-2 text-center">
               {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
                 <span key={i} className="text-[8px] font-bold text-gray-300">{day}</span>
@@ -402,19 +397,15 @@ export default function GymTracker() {
             </div>
           </div>
 
-          {/* Weekly Rows */}
           {weeks.map((week, wIndex) => {
-            // Get the short date format for the Monday of this week
             const mondayLabel = week[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             
             return (
               <div key={wIndex} className="flex items-center mb-2">
-                {/* Clean Date Label (e.g., "Mar 2") */}
                 <div className="w-10 text-[8px] font-bold text-gray-400 text-right pr-2">
                   {mondayLabel}
                 </div>
                 
-                {/* 7-Day Grid */}
                 <div className="flex-1 grid grid-cols-7 gap-2">
                   {week.map(d => {
                     const ts = d.getTime();
@@ -447,14 +438,12 @@ export default function GymTracker() {
           })}
         </div>
 
-        {/* Tap Output */}
         <div className="h-4 mt-3 flex items-center justify-center">
            <p className={`text-[9px] font-bold uppercase tracking-widest transition-opacity ${selectedHeatmapDate ? 'text-[#E8B4B8]' : 'text-gray-300'}`}>
              {selectedHeatmapDate || "Tap a square for details"}
            </p>
         </div>
 
-        {/* Dynamic Legend */}
         <div className="flex items-center justify-center space-x-4 mt-3 text-[8px] uppercase tracking-widest text-gray-400 font-bold w-full border-t border-gray-50 pt-4">
           <div className="flex items-center space-x-1.5">
             <div className="w-2.5 h-2.5 rounded-[2px] bg-gray-100/50"></div>
@@ -524,9 +513,13 @@ export default function GymTracker() {
         <div className="space-y-6">
           <div className="flex flex-col space-y-3">
             <div className="flex space-x-2">
-              {/* FIXED: category === cat */}
               {(["upper", "lower", "core"] as const).map((cat) => (
-                <button key={cat} onClick={() => { setCategory(cat); triggerHaptic(20); }} className={`flex-1 py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-semibold transition-all duration-200 ${category === cat ? "bg-[#E8B4B8] text-white shadow-sm scale-[1.02]" : "bg-gray-50 text-gray-400 border border-gray-100"}`}>{cat}</button>
+                <button 
+                  key={cat} 
+                  onClick={() => { setCategory(cat); triggerHaptic(20); }} 
+                  className={`flex-1 py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-semibold transition-all duration-200 ${category === cat ? "bg-[#E8B4B8] text-white shadow-sm scale-[1.02]" : "bg-gray-50 text-gray-400 border border-gray-100"}`}>
+                  {cat}
+                </button>
               ))}
             </div>
             <div className="flex space-x-2">
@@ -572,40 +565,59 @@ export default function GymTracker() {
           {isSaved ? "✓ Saved" : (todayRecord ? "UPDATE SET" : "SAVE SET")}
         </button>
 
-        <div className="pt-8 border-t border-gray-100 space-y-4">
-          <div className="text-center space-y-2">
-            <h2 className="text-xs uppercase tracking-[0.2em] text-gray-400">Today&apos;s Plan & History</h2>
-            <div className="flex justify-center space-x-3 text-[10px] font-bold uppercase tracking-widest">
-               <span className={todaySummary.upper > 0 ? "text-[#E8B4B8]" : "text-gray-300"}>{todaySummary.upper} Upper</span>
-               <span className="text-gray-200">•</span>
-               <span className={todaySummary.lower > 0 ? "text-[#A9C2A3]" : "text-gray-300"}>{todaySummary.lower} Lower</span>
-               <span className="text-gray-200">•</span>
-               <span className={todaySummary.core > 0 ? "text-[#7A9374]" : "text-gray-300"}>{todaySummary.core} Core</span>
-            </div>
+        {/* 🌸 THE FINAL, REFINED "EMPTY STATE" ONBOARDING CARD 🌸 */}
+        {history.length === 0 ? (
+          <div className="pt-8 border-t border-gray-100 space-y-4 animate-fade-in">
+             <div className="bg-gray-50 p-6 rounded-3xl border border-gray-200 shadow-sm text-center space-y-5">
+                <span className="text-3xl">👋</span>
+                <h3 className="text-gray-800 font-medium">Welcome to your training log.</h3>
+                <p className="text-sm text-gray-500 leading-relaxed text-left">
+                  Everything here is private and lives strictly on your device.
+                </p>
+                <ul className="text-xs text-gray-500 leading-relaxed text-left space-y-3 bg-white p-4 rounded-2xl border border-gray-100">
+                  <li className="flex gap-2"><span>🎯</span> <span><strong>Tag your set:</strong> Choose a muscle group (Upper/Lower/Core) and tap the icon to toggle equipment (Weights/Machine/Body).</span></li>
+                  <li className="flex gap-2"><span>📝</span> <span><strong>Log your first set</strong> above to start tracking.</span></li>
+                  <li className="flex gap-2"><span>📈</span> <span><strong>Push harder</strong> than last time to see the card turn green.</span></li>
+                  <li className="flex gap-2"><span>✨</span> <span><strong>Hit an all-time high</strong> to unlock a pink PR badge.</span></li>
+                  <li className="flex gap-2"><span>📲</span> <span><strong>Save it to your home screen</strong> to use it completely offline!</span></li>
+                </ul>
+             </div>
           </div>
-
-          {(["lower", "upper", "core"] as const).map((cat) => groupedExercises[cat].length > 0 && (
-            <div key={cat} className="space-y-2 mt-4">
-              <p className="text-[10px] text-gray-300 font-semibold uppercase tracking-wider ml-1">{cat} Body</p>
-              <div className="flex flex-wrap gap-2">
-                {groupedExercises[cat].map((ex, i) => (
-                  <button key={i} onClick={() => handleSelectPastExercise(ex, cat)} className={`px-4 py-2 text-sm font-medium rounded-full flex items-center space-x-1.5 ${exercisesToday.has(ex) ? "bg-[#A9C2A3]/15 text-[#6B8565]" : "bg-[#A9C2A3] text-white shadow-sm"}`}>
-                    <span>{getEquipmentIcon(equipmentMap.get(ex))}</span>
-                    <span>{ex}</span>
-                  </button>
-                ))}
+        ) : (
+          <div className="pt-8 border-t border-gray-100 space-y-4">
+            <div className="text-center space-y-2">
+              <h2 className="text-xs uppercase tracking-[0.2em] text-gray-400">Today&apos;s Plan & History</h2>
+              <div className="flex justify-center space-x-3 text-[10px] font-bold uppercase tracking-widest">
+                 <span className={todaySummary.upper > 0 ? "text-[#E8B4B8]" : "text-gray-300"}>{todaySummary.upper} Upper</span>
+                 <span className="text-gray-200">•</span>
+                 <span className={todaySummary.lower > 0 ? "text-[#A9C2A3]" : "text-gray-300"}>{todaySummary.lower} Lower</span>
+                 <span className="text-gray-200">•</span>
+                 <span className={todaySummary.core > 0 ? "text-[#7A9374]" : "text-gray-300"}>{todaySummary.core} Core</span>
               </div>
             </div>
-          ))}
 
-          <div className="flex justify-center pt-6 pb-2">
-             <button onClick={() => setShowHeatmap(!showHeatmap)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
-               {showHeatmap ? "Hide Calendar" : "📊 Show Progression Calendar"}
-             </button>
+            {(["lower", "upper", "core"] as const).map((cat) => groupedExercises[cat].length > 0 && (
+              <div key={cat} className="space-y-2 mt-4">
+                <p className="text-[10px] text-gray-300 font-semibold uppercase tracking-wider ml-1">{cat} Body</p>
+                <div className="flex flex-wrap gap-2">
+                  {groupedExercises[cat].map((ex, i) => (
+                    <button key={i} onClick={() => handleSelectPastExercise(ex, cat)} className={`px-4 py-2 text-sm font-medium rounded-full flex items-center space-x-1.5 ${exercisesToday.has(ex) ? "bg-[#A9C2A3]/15 text-[#6B8565]" : "bg-[#A9C2A3] text-white shadow-sm"}`}>
+                      <span>{getEquipmentIcon(equipmentMap.get(ex))}</span>
+                      <span>{ex}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <div className="flex justify-center pt-6 pb-2">
+               <button onClick={() => setShowHeatmap(!showHeatmap)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
+                 {showHeatmap ? "Hide Calendar" : "📊 Show Progression Calendar"}
+               </button>
+            </div>
+            {renderHeatmap()}
           </div>
-          {renderHeatmap()}
-
-        </div>
+        )}
 
         <div className="pt-12 flex justify-center items-center space-x-6 opacity-30 hover:opacity-100 transition-opacity">
           <input type="file" accept=".csv" onChange={importData} ref={fileInputRef} className="hidden" />
