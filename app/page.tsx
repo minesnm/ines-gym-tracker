@@ -524,8 +524,9 @@ export default function GymTracker() {
         <div className="space-y-6">
           <div className="flex flex-col space-y-3">
             <div className="flex space-x-2">
+              {/* FIXED: category === cat */}
               {(["upper", "lower", "core"] as const).map((cat) => (
-                <button key={cat} onClick={() => { setCategory(cat); triggerHaptic(20); }} className={`flex-1 py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-semibold transition-all duration-200 ${category === gap ? "bg-[#E8B4B8] text-white shadow-sm scale-[1.02]" : "bg-gray-50 text-gray-400 border border-gray-100"}`}>{cat}</button>
+                <button key={cat} onClick={() => { setCategory(cat); triggerHaptic(20); }} className={`flex-1 py-2.5 rounded-xl text-[10px] uppercase tracking-widest font-semibold transition-all duration-200 ${category === cat ? "bg-[#E8B4B8] text-white shadow-sm scale-[1.02]" : "bg-gray-50 text-gray-400 border border-gray-100"}`}>{cat}</button>
               ))}
             </div>
             <div className="flex space-x-2">
