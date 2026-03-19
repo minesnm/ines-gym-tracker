@@ -107,6 +107,36 @@ export default function GymTracker() {
     }
   }, []);
 
+  // ─── NATIVE GESTURE INTERCEPTION ───────────────────────────────────────────────
+  
+  const openActivityLog = () => {
+    window.history.pushState({ modal: "activityLog" }, "");
+    setIsLogOpen(true);
+  };
+
+  const closeActivityLog = () => {
+    // If the dummy state is still there, navigating back will naturally close the log via the popstate listener
+    if (window.history.state?.modal === "activityLog") {
+      window.history.back();
+    } else {
+      // Fallback in case history was manipulated
+      setIsLogOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      // If the user triggers the system back gesture, we close the log
+      if (isLogOpen) {
+        setIsLogOpen(false);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isLogOpen]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const isToday = (dateString: string) => {
     const d1 = new Date(dateString), d2 = new Date();
     return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
@@ -152,7 +182,6 @@ export default function GymTracker() {
       const ref = tRecord || lRecord;
       if (ref) { setCategory(ref.category); setEquipment(ref.equipment || "free"); }
       
-      // FIXED: Used "date" instead of "dateStr" to match the state type signature
       const dailyMax = new Map<number, { date: string; weight: number; reps: number; score: number }>();
       matches.forEach((e) => {
         const d = new Date(e.date); d.setHours(0, 0, 0, 0);
@@ -431,7 +460,7 @@ export default function GymTracker() {
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
             <h2 className="text-2xl font-light text-gray-800">Activity Log</h2>
-            <button onClick={() => setIsLogOpen(false)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-800 bg-white border border-gray-200 px-4 py-2 rounded-full shadow-sm">
+            <button onClick={closeActivityLog} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-800 bg-white border border-gray-200 px-4 py-2 rounded-full shadow-sm">
               Close
             </button>
           </div>
@@ -738,7 +767,7 @@ export default function GymTracker() {
             )}
 
             <div className="flex justify-center pt-6 pb-2 gap-3">
-              <button onClick={() => setIsLogOpen(true)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
+              <button onClick={openActivityLog} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
                 Activity Log
               </button>
               <button onClick={() => setShowHeatmap(!showHeatmap)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
