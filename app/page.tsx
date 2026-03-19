@@ -255,8 +255,17 @@ export default function GymTracker() {
     localStorage.setItem("boutiqueGymHidden", JSON.stringify(updated));
   };
 
+  // FIXED: Vercel prefers standard if/else instead of unassigned ternary expressions
   const toggleGroup = (name: string) => {
-    setExpandedGroups((prev) => { const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next; });
+    setExpandedGroups((prev) => { 
+      const next = new Set(prev); 
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next; 
+    });
   };
 
   const exportToCSV = () => {
@@ -334,6 +343,7 @@ export default function GymTracker() {
     const sorted = [...history].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const lastSeen = new Map<string, Workout>(), bestScore = new Map<string, number>();
     const dayStats = new Map<number, { total: number; progress: number }>();
+    
     sorted.forEach((entry) => {
       const d = new Date(entry.date); d.setHours(0, 0, 0, 0); const ts = d.getTime();
       if (!dayStats.has(ts)) dayStats.set(ts, { total: 0, progress: 0 });
@@ -341,8 +351,11 @@ export default function GymTracker() {
       const prev = lastSeen.get(entry.exercise);
       const score = calculateScore(entry.weight, entry.reps);
       const best = bestScore.get(entry.exercise) || 0;
-      let progress = (score > best && best > 0) || (!!prev && (entry.weight > prev.weight || (entry.weight === prev.weight && entry.sets > prev.sets) || (entry.weight === prev.weight && entry.sets === prev.sets && entry.reps > prev.reps)));
+      
+      // FIXED: Using const instead of let here
+      const progress = (score > best && best > 0) || (!!prev && (entry.weight > prev.weight || (entry.weight === prev.weight && entry.sets > prev.sets) || (entry.weight === prev.weight && entry.sets === prev.sets && entry.reps > prev.reps)));
       if (progress) stats.progress++;
+      
       lastSeen.set(entry.exercise, entry);
       if (score > best) bestScore.set(entry.exercise, score);
     });
@@ -450,7 +463,7 @@ export default function GymTracker() {
                           onClick={(e) => { e.stopPropagation(); toggleHideExercise(exName); }}
                           className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 px-2 py-0.5 rounded-full"
                         >
-                          {isHidden ? <IconEye size={12} /> : <IconEyeOff size={12} />}
+                          {isHidden ? <IconEyeOff size={12} /> : <IconEye size={12} />}
                           {isHidden ? "HIDDEN" : "HIDE"}
                         </button>
                         {entries.length > 1 && (
