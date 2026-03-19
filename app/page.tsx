@@ -151,10 +151,13 @@ export default function GymTracker() {
     };
   }, [history]);
 
+  // Sort history newest first so Set grabs the most recently performed exercises
+  const recentHistory = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  
   const groupedExercises = {
-    upper: Array.from(new Set(history.filter((i) => i.category === "upper").map((i) => i.exercise))).reverse(),
-    lower: Array.from(new Set(history.filter((i) => i.category === "lower").map((i) => i.exercise))).reverse(),
-    core:  Array.from(new Set(history.filter((i) => i.category === "core" ).map((i) => i.exercise))).reverse(),
+    upper: Array.from(new Set(recentHistory.filter((i) => i.category === "upper").map((i) => i.exercise))),
+    lower: Array.from(new Set(recentHistory.filter((i) => i.category === "lower").map((i) => i.exercise))),
+    core:  Array.from(new Set(recentHistory.filter((i) => i.category === "core" ).map((i) => i.exercise))),
   };
 
   const equipmentMap = new Map<string, string>();
