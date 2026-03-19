@@ -707,7 +707,7 @@ export default function GymTracker() {
         ) : (
           <div className="pt-8 border-t border-gray-100 space-y-4">
             <div className="text-center space-y-2">
-              <h2 className="text-xs uppercase tracking-[0.2em] text-gray-400">Today&apos;s Plan & History</h2>
+              <h2 className="text-xs uppercase tracking-[0.2em] text-gray-400">Your Exercises</h2>
               <div className="flex justify-center space-x-3 text-[10px] font-bold uppercase tracking-widest">
                 <span className={todaySummary.upper > 0 ? "text-[#E8B4B8]" : "text-gray-300"}>{todaySummary.upper} Upper</span>
                 <span className="text-gray-200">·</span>
