@@ -151,12 +151,14 @@ export default function GymTracker() {
       setTodayRecord(tRecord); setLastRecord(lRecord);
       const ref = tRecord || lRecord;
       if (ref) { setCategory(ref.category); setEquipment(ref.equipment || "free"); }
-      const dailyMax = new Map<number, { dateStr: string; weight: number; reps: number; score: number }>();
+      
+      // FIXED: Used "date" instead of "dateStr" to match the state type signature
+      const dailyMax = new Map<number, { date: string; weight: number; reps: number; score: number }>();
       matches.forEach((e) => {
         const d = new Date(e.date); d.setHours(0, 0, 0, 0);
         const ts = d.getTime(), score = calculateScore(e.weight, e.reps);
         if (!dailyMax.has(ts) || dailyMax.get(ts)!.score < score)
-          dailyMax.set(ts, { dateStr: `${d.getDate()}/${String(d.getMonth() + 1).padStart(2, "0")}`, weight: e.weight, reps: e.reps, score });
+          dailyMax.set(ts, { date: `${d.getDate()}/${String(d.getMonth() + 1).padStart(2, "0")}`, weight: e.weight, reps: e.reps, score });
       });
       setChartData(Array.from(dailyMax.entries()).sort((a, b) => a[0] - b[0]).map(([, v]) => v).slice(-7));
     } else {
@@ -255,7 +257,6 @@ export default function GymTracker() {
     localStorage.setItem("boutiqueGymHidden", JSON.stringify(updated));
   };
 
-  // FIXED: Vercel prefers standard if/else instead of unassigned ternary expressions
   const toggleGroup = (name: string) => {
     setExpandedGroups((prev) => { 
       const next = new Set(prev); 
@@ -352,7 +353,6 @@ export default function GymTracker() {
       const score = calculateScore(entry.weight, entry.reps);
       const best = bestScore.get(entry.exercise) || 0;
       
-      // FIXED: Using const instead of let here
       const progress = (score > best && best > 0) || (!!prev && (entry.weight > prev.weight || (entry.weight === prev.weight && entry.sets > prev.sets) || (entry.weight === prev.weight && entry.sets === prev.sets && entry.reps > prev.reps)));
       if (progress) stats.progress++;
       
@@ -463,7 +463,7 @@ export default function GymTracker() {
                           onClick={(e) => { e.stopPropagation(); toggleHideExercise(exName); }}
                           className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 px-2 py-0.5 rounded-full"
                         >
-                          {isHidden ? <IconEyeOff size={12} /> : <IconEye size={12} />}
+                          {isHidden ? <IconEye size={12} /> : <IconEyeOff size={12} />}
                           {isHidden ? "HIDDEN" : "HIDE"}
                         </button>
                         {entries.length > 1 && (
