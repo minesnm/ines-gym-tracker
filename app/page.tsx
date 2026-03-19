@@ -612,6 +612,15 @@ export default function GymTracker() {
               );
             })}
           </div>
+
+          {/* Data Management Utilities */}
+          <div className="mt-12 pt-8 border-t border-gray-200/60 flex justify-center items-center space-x-6">
+            <input type="file" accept=".csv" onChange={importData} ref={fileInputRef} className="hidden" />
+            <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800 transition-colors">Import CSV</button>
+            <button onClick={exportToCSV} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800 transition-colors">Export CSV</button>
+            <button onClick={clearHistory} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-500 transition-colors">Wipe Data</button>
+          </div>
+
         </div>
       </div>
     );
@@ -830,14 +839,6 @@ export default function GymTracker() {
             {renderHeatmap()}
           </div>
         )}
-
-        {/* Utility bar — fades in on hover so it doesn't clutter the main view */}
-        <div className="pt-12 flex justify-center items-center space-x-6 opacity-30 hover:opacity-100 transition-opacity">
-          <input type="file" accept=".csv" onChange={importData} ref={fileInputRef} className="hidden" />
-          <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800">Import CSV</button>
-          <button onClick={exportToCSV} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800">Export CSV</button>
-          <button onClick={clearHistory} className="text-[10px] font-bold uppercase tracking-widest text-red-400">Wipe</button>
-        </div>
 
       </div>
     </div>
