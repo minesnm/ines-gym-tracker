@@ -13,18 +13,24 @@ interface Workout {
   date: string;
 }
 
+// Single normalize function — lowercase + trim.
+// No .replace(/s$/, "") which caused false matches (e.g. "Press" → "Pre").
 const normalize = (str: string) => str.toLowerCase().trim();
 
 // ─── SVG ICONS ────────────────────────────────────────────────────────────────
+// Using SVG throughout keeps the UI consistent and professional.
+// No emojis in interactive controls.
 
 const IconTrash = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6" />
     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    <line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
   </svg>
 );
 
+// Eye open — used when the exercise is hidden (tap to restore)
 const IconEye = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -32,6 +38,7 @@ const IconEye = ({ size = 14 }: { size?: number }) => (
   </svg>
 );
 
+// Eye with slash — used when the exercise is visible (tap to hide)
 const IconEyeOff = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
@@ -40,17 +47,11 @@ const IconEyeOff = ({ size = 14 }: { size?: number }) => (
   </svg>
 );
 
+// Pencil — rename button
 const IconPencil = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-  </svg>
-);
-
-const IconChevron = ({ size = 12, rotated = false }: { size?: number; rotated?: boolean }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-    style={{ transition: "transform 0.2s", transform: rotated ? "rotate(180deg)" : "rotate(0deg)" }}>
-    <polyline points="6 9 12 15 18 9" />
   </svg>
 );
 
@@ -76,10 +77,17 @@ export default function GymTracker() {
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [selectedHeatmapDate, setSelectedHeatmapDate] = useState<string | null>(null);
 
-  // Which exercise groups have their full history expanded in the Activity Log.
-  // The summary (most recent entry) is always visible — this controls the older entries below it.
+  // Which exercise groups are open in the Activity Log. All collapsed by default
+  // so the log opens as a clean scannable list of exercise names.
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // Hidden exercises: only affects pill visibility on the main page.
+  // History is always preserved.
   const [hiddenExercises, setHiddenExercises] = useState<string[]>([]);
+
+  // Editing state for Activity Log
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ date: "", weight: 0, sets: 0, reps: 0 });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -165,6 +173,7 @@ export default function GymTracker() {
   }, [weight, sets, reps, lastRecord, maxHistoricalScore]);
 
   const triggerHaptic = (p: number | number[]) => { if (typeof window !== "undefined" && window.navigator?.vibrate) window.navigator.vibrate(p); };
+
   const handleIncrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { triggerHaptic(30); setter(typeof val === "number" ? val + 1 : 1); };
   const handleDecrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { triggerHaptic(30); setter(typeof val === "number" && val > 0 ? val - 1 : 0); };
 
@@ -190,6 +199,33 @@ export default function GymTracker() {
     setTimeout(() => setIsSaved(false), 1500);
   };
 
+  const startEditing = (entry: Workout) => {
+    triggerHaptic(20);
+    setEditingId(entry.id);
+    setEditForm({
+      date: entry.date.split('T')[0], 
+      weight: entry.weight,
+      sets: entry.sets,
+      reps: entry.reps
+    });
+  };
+
+  const saveEdit = (id: string) => {
+    triggerHaptic([50, 50]);
+    const updatedHistory = history.map(h => {
+      if (h.id === id) {
+        const updatedDate = new Date(`${editForm.date}T12:00:00`).toISOString();
+        return { ...h, weight: Number(editForm.weight), sets: Number(editForm.sets), reps: Number(editForm.reps), date: updatedDate };
+      }
+      return h;
+    });
+    setHistory(updatedHistory);
+    localStorage.setItem("boutiqueGymHistory", JSON.stringify(updatedHistory));
+    setEditingId(null);
+  };
+
+  // Deletes one specific entry by id.
+  // isFromActiveCard resets the form when deleting via the button next to Save.
   const handleDeleteEntry = (id: string, isFromActiveCard = false) => {
     if (!confirm("Permanently delete this entry?")) return;
     triggerHaptic([50, 50]);
@@ -199,6 +235,7 @@ export default function GymTracker() {
     if (isFromActiveCard) { setExercise(""); setWeight(30); setSets(3); setReps(10); }
   };
 
+  // Renames every entry for a given exercise in one operation.
   const renameExercise = (oldName: string) => {
     const newName = window.prompt(`Rename "${oldName}" to:`, oldName);
     if (!newName || newName.trim() === "" || newName.trim() === oldName) return;
@@ -208,6 +245,7 @@ export default function GymTracker() {
     localStorage.setItem("boutiqueGymHistory", JSON.stringify(updated));
   };
 
+  // Toggles pill visibility on the main page. History is never affected.
   const toggleHideExercise = (name: string) => {
     triggerHaptic(30);
     const updated = hiddenExercises.includes(name)
@@ -303,7 +341,7 @@ export default function GymTracker() {
       const prev = lastSeen.get(entry.exercise);
       const score = calculateScore(entry.weight, entry.reps);
       const best = bestScore.get(entry.exercise) || 0;
-      const progress = (score > best && best > 0) || (!!prev && (entry.weight > prev.weight || (entry.weight === prev.weight && entry.sets > prev.sets) || (entry.weight === prev.weight && entry.sets === prev.sets && entry.reps > prev.reps)));
+      let progress = (score > best && best > 0) || (!!prev && (entry.weight > prev.weight || (entry.weight === prev.weight && entry.sets > prev.sets) || (entry.weight === prev.weight && entry.sets === prev.sets && entry.reps > prev.reps)));
       if (progress) stats.progress++;
       lastSeen.set(entry.exercise, entry);
       if (score > best) bestScore.set(entry.exercise, score);
@@ -357,20 +395,6 @@ export default function GymTracker() {
   };
 
   // ─── ACTIVITY LOG MODAL ───────────────────────────────────────────────────────
-  //
-  // Each exercise card always shows:
-  //   • Date of most recent entry (top left) — so you can see at a glance when you last did it
-  //   • Rename (pencil) and Hide/Show (eye) icon buttons — top right, always accessible
-  //   • Exercise name + category + equipment — bold, prominent
-  //   • Most recent performance — weight · sets × reps
-  //   • Delete button for the most recent entry
-  //
-  // If the exercise has more than one entry, a "Show X older entries" chevron button
-  // appears at the bottom. Tapping it expands the older entries below, each with
-  // their own delete button.
-  //
-  // This gives you the summary at a glance (like your screenshot) without the
-  // clutter of showing every entry all at once.
 
   const renderActivityLog = () => {
     if (!isLogOpen) return null;
@@ -391,16 +415,13 @@ export default function GymTracker() {
       <div className="fixed inset-0 z-50 bg-gray-50 overflow-y-auto pb-20">
         <div className="p-6 max-w-md mx-auto pt-12">
 
-          <div className="flex justify-between items-center mb-2">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-8">
             <h2 className="text-2xl font-light text-gray-800">Activity Log</h2>
-            <button onClick={() => setIsLogOpen(false)}
-              className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-800 bg-white border border-gray-200 px-4 py-2 rounded-full shadow-sm">
+            <button onClick={() => setIsLogOpen(false)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-800 bg-white border border-gray-200 px-4 py-2 rounded-full shadow-sm">
               Close
             </button>
           </div>
-          <p className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-8">
-            {history.length} {history.length === 1 ? "entry" : "entries"} total
-          </p>
 
           {history.length === 0 && <p className="text-center text-gray-400 text-sm mt-10">Your log is empty.</p>}
 
@@ -409,110 +430,124 @@ export default function GymTracker() {
               const isExpanded = expandedGroups.has(exName);
               const isHidden   = hiddenExercises.includes(exName);
               const latest     = entries[0];
-              const olderEntries = entries.slice(1);
-              const latestDate = new Date(latest.date).toLocaleDateString("en-US", {
-                month: "short", day: "numeric", year: "numeric",
-              });
+              const dateStr    = new Date(latest.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase();
 
               return (
-                <div key={exName} className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${isHidden ? "border-gray-100 opacity-70" : "border-gray-200"}`}>
+                <div key={exName} className={`rounded-2xl border transition-all ${isHidden ? "opacity-60" : ""} bg-white border-gray-100 shadow-sm`}>
 
-                  {/* ── Summary card — always visible ── */}
-                  <div className="px-4 pt-4 pb-3">
+                  {/* Summary Header (Styled exactly like the screenshot) */}
+                  <div
+                    onClick={() => toggleGroup(exName)}
+                    className="p-4 cursor-pointer flex justify-between items-center"
+                  >
+                    <div className="flex-1">
+                      {/* Top Row: Date & Hide Button */}
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-[10px] tracking-widest font-bold text-gray-400">
+                          {dateStr}
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleHideExercise(exName); }}
+                          className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 px-2 py-0.5 rounded-full"
+                        >
+                          {isHidden ? <IconEye size={12} /> : <IconEyeOff size={12} />}
+                          {isHidden ? "HIDDEN" : "HIDE"}
+                        </button>
+                        {entries.length > 1 && (
+                           <span className="text-[9px] uppercase tracking-widest font-bold text-[#A9C2A3] bg-[#A9C2A3]/10 px-2 py-0.5 rounded-full">
+                              {entries.length} ENTRIES
+                           </span>
+                        )}
+                      </div>
 
-                    {/* Top row: date + management buttons */}
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">
-                        {latestDate}
-                        {isToday(latest.date) && <span className="ml-2 text-[#E8B4B8]">· Today</span>}
-                        {isHidden && <span className="ml-2 text-gray-300">· Hidden</span>}
+                      {/* Middle Row: Exercise & Category */}
+                      <p className="text-base font-bold text-gray-800 mb-1 flex items-baseline gap-1.5">
+                        {exName}
+                        <span className="text-xs font-normal text-gray-400 capitalize">
+                          ({latest.category} • {getEquipmentLabel(latest.equipment)})
+                        </span>
                       </p>
 
-                      {/* Management buttons — always visible, icon + compact label */}
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => renameExercise(exName)}
-                          title="Rename exercise"
-                          className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-gray-400 hover:text-blue-500 bg-gray-50 border border-gray-100 px-2 py-1 rounded-full transition-colors"
-                        >
-                          <IconPencil size={11} /> Rename
-                        </button>
-                        <button
-                          onClick={() => toggleHideExercise(exName)}
-                          title={isHidden ? "Show in main list" : "Hide from main list"}
-                          className={`flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-full border transition-colors ${
-                            isHidden
-                              ? "text-[#A9C2A3] bg-[#A9C2A3]/10 border-[#A9C2A3]/20"
-                              : "text-gray-400 bg-gray-50 border-gray-100 hover:text-gray-600"
-                          }`}
-                        >
-                          {isHidden ? <IconEye size={11} /> : <IconEyeOff size={11} />}
-                          {isHidden ? "Show" : "Hide"}
-                        </button>
-                      </div>
+                      {/* Bottom Row: Weight & Reps summary */}
+                      <p className="text-xs text-gray-500 font-medium">
+                        {latest.weight > 0 ? `${latest.weight}kg` : "Bodyweight"} • {latest.sets} sets of {latest.reps}
+                      </p>
                     </div>
 
-                    {/* Exercise name + meta */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-gray-800 leading-snug">
-                          {exName}{" "}
-                          <span className="font-normal text-gray-400 capitalize text-xs">
-                            ({entries[0].category} · {getEquipmentLabel(latest.equipment)})
-                          </span>
-                        </p>
-                        <p className="text-xs text-gray-500 font-medium mt-0.5">
-                          {latest.weight > 0 ? `${latest.weight}kg` : "Bodyweight"} · {latest.sets} sets × {latest.reps} reps
-                        </p>
-                      </div>
-
-                      {/* Delete latest entry */}
-                      <button
-                        onClick={() => handleDeleteEntry(latest.id, latest.id === todayRecord?.id)}
-                        className="text-red-300 p-2 rounded-xl hover:bg-red-50 hover:text-red-400 transition-colors shrink-0 -mr-1"
-                        title="Delete this entry"
-                      >
-                        <IconTrash size={15} />
-                      </button>
+                    {/* Expand Chevron */}
+                    <div className="text-gray-300 shrink-0 ml-4 transition-transform duration-200" style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </div>
                   </div>
 
-                  {/* ── Older entries (expanded) ── */}
-                  {isExpanded && olderEntries.length > 0 && (
-                    <div className="border-t border-gray-50 divide-y divide-gray-50">
-                      {olderEntries.map((entry) => (
-                        <div key={entry.id} className="px-4 py-3 flex justify-between items-center bg-gray-50/40">
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-0.5">
-                              {new Date(entry.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
-                            </p>
-                            <p className="text-xs text-gray-500 font-medium">
-                              {entry.weight > 0 ? `${entry.weight}kg` : "Bodyweight"} · {entry.sets} sets × {entry.reps} reps
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteEntry(entry.id)}
-                            className="text-red-300 p-2 rounded-xl hover:bg-red-50 hover:text-red-400 transition-colors ml-3 shrink-0"
-                            title="Delete this entry"
-                          >
-                            <IconTrash size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {/* Expanded: History & Edit Controls */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-50 bg-gray-50/50">
+                      <div className="px-4 py-2 border-b border-gray-50 flex justify-between items-center">
+                        <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Log History</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); renameExercise(exName); }}
+                          className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-blue-500 transition-colors"
+                        >
+                          <IconPencil size={12}/> RENAME ALL
+                        </button>
+                      </div>
 
-                  {/* ── Expand / collapse older entries ── */}
-                  {olderEntries.length > 0 && (
-                    <button
-                      onClick={() => toggleGroup(exName)}
-                      className="w-full px-4 py-2.5 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 border-t border-gray-50 hover:bg-gray-50/50 transition-colors"
-                    >
-                      <IconChevron size={11} rotated={isExpanded} />
-                      {isExpanded
-                        ? "Hide older entries"
-                        : `${olderEntries.length} older ${olderEntries.length === 1 ? "entry" : "entries"}`}
-                    </button>
+                      <div className="divide-y divide-gray-50">
+                        {entries.map((entry) => (
+                          <div key={entry.id} className={`p-4 flex flex-col transition-all ${editingId === entry.id ? 'bg-white shadow-sm' : ''}`}>
+                            
+                            {editingId === entry.id ? (
+                              <div className="flex flex-col gap-4 animate-fade-in">
+                                <div className="flex justify-between items-center">
+                                  <p className="text-sm font-bold text-[#E8B4B8]">Editing Entry</p>
+                                  <input type="date" value={editForm.date} onChange={(e) => setEditForm({...editForm, date: e.target.value})} className="text-xs bg-gray-50 border border-gray-200 rounded-md p-1 outline-none text-gray-600" />
+                                </div>
+                                <div className="flex gap-2">
+                                  <div className="flex-1 bg-gray-50 rounded-xl p-2 border border-gray-100">
+                                    <p className="text-[9px] uppercase font-bold text-gray-400 text-center mb-1">Weight</p>
+                                    <input type="number" value={editForm.weight} onChange={(e) => setEditForm({...editForm, weight: Number(e.target.value)})} className="w-full bg-transparent text-center font-bold text-gray-800 outline-none" />
+                                  </div>
+                                  <div className="flex-1 bg-gray-50 rounded-xl p-2 border border-gray-100">
+                                    <p className="text-[9px] uppercase font-bold text-gray-400 text-center mb-1">Sets</p>
+                                    <input type="number" value={editForm.sets} onChange={(e) => setEditForm({...editForm, sets: Number(e.target.value)})} className="w-full bg-transparent text-center font-bold text-gray-800 outline-none" />
+                                  </div>
+                                  <div className="flex-1 bg-gray-50 rounded-xl p-2 border border-gray-100">
+                                    <p className="text-[9px] uppercase font-bold text-gray-400 text-center mb-1">Reps</p>
+                                    <input type="number" value={editForm.reps} onChange={(e) => setEditForm({...editForm, reps: Number(e.target.value)})} className="w-full bg-transparent text-center font-bold text-gray-800 outline-none" />
+                                  </div>
+                                </div>
+                                <div className="flex justify-end gap-2 mt-2">
+                                  <button onClick={() => setEditingId(null)} className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600">Cancel</button>
+                                  <button onClick={() => saveEdit(entry.id)} className="px-4 py-2 text-xs font-bold uppercase tracking-widest bg-[#E8B4B8] text-white rounded-lg shadow-sm">Save</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex justify-between items-center w-full">
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-0.5">
+                                    {new Date(entry.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase()}
+                                    {isToday(entry.date) && <span className="ml-2 text-[#E8B4B8]">· TODAY</span>}
+                                  </p>
+                                  <p className="text-xs text-gray-600 font-medium">
+                                    {entry.weight > 0 ? `${entry.weight}kg` : "Bodyweight"} • {entry.sets} sets of {entry.reps}
+                                  </p>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button onClick={() => startEditing(entry)} className="text-gray-300 p-2 rounded-lg hover:bg-white hover:shadow-sm hover:text-[#E8B4B8] transition-all" title="Edit Entry">
+                                    <IconPencil size={16} />
+                                  </button>
+                                  <button onClick={() => handleDeleteEntry(entry.id, entry.id === todayRecord?.id)} className="text-red-300 p-2 rounded-lg hover:bg-white hover:shadow-sm hover:text-red-400 transition-all" title="Delete Entry">
+                                    <IconTrash size={16} />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               );
@@ -552,6 +587,7 @@ export default function GymTracker() {
           <p className="text-sm text-gray-400">Log your workout, track your progress.</p>
         </div>
 
+        {/* Last record / Today's log card */}
         {displayRecord && (
           <div className={`p-6 rounded-3xl transition-all duration-300 shadow-sm border ${cardBorder} ${cardBg}`}>
             <div className="flex justify-between items-center mb-1">
@@ -571,6 +607,7 @@ export default function GymTracker() {
           </div>
         )}
 
+        {/* Input form */}
         <div className="space-y-6">
           <div className="flex flex-col space-y-3">
             <div className="flex space-x-2">
@@ -592,6 +629,7 @@ export default function GymTracker() {
             </div>
           </div>
 
+          {/* Weight */}
           <div className="flex items-center justify-between bg-gray-50/50 border border-gray-200 rounded-2xl p-2 min-h-[60px]">
             <button onClick={() => handleDecrement(setWeight, weight)} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">-</button>
             <div className="flex items-baseline justify-center flex-1">
@@ -601,6 +639,7 @@ export default function GymTracker() {
             <button onClick={() => handleIncrement(setWeight, weight)} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">+</button>
           </div>
 
+          {/* Sets & Reps */}
           <div className="flex space-x-4">
             {([["sets", sets, setSets], ["reps", reps, setReps]] as const).map(([label, val, setter]) => (
               <div key={label} className="flex-1 bg-gray-50/50 border border-gray-200 rounded-2xl p-2 flex items-center justify-between shadow-sm">
@@ -615,6 +654,7 @@ export default function GymTracker() {
           </div>
         </div>
 
+        {/* Save row — trash icon only appears when there is a today entry to undo */}
         <div className="flex gap-3 mt-4">
           {todayRecord && (
             <button onClick={() => handleDeleteEntry(todayRecord.id, true)}
@@ -629,6 +669,7 @@ export default function GymTracker() {
           </button>
         </div>
 
+        {/* Empty state / history */}
         {history.length === 0 ? (
           <div className="pt-8 border-t border-gray-100 space-y-4">
             <div className="bg-gray-50 p-6 rounded-3xl border border-gray-200 shadow-sm space-y-5">
@@ -663,6 +704,7 @@ export default function GymTracker() {
               </div>
             </div>
 
+            {/* Exercise pills — hidden exercises filtered out silently */}
             {(["lower", "upper", "core"] as const).map((cat) =>
               groupedExercises[cat].filter((ex) => !hiddenExercises.includes(ex)).length > 0 && (
                 <div key={cat} className="space-y-2 mt-4">
@@ -695,12 +737,14 @@ export default function GymTracker() {
           </div>
         )}
 
+        {/* Utility bar — fades in on hover so it doesn't clutter the main view */}
         <div className="pt-12 flex justify-center items-center space-x-6 opacity-30 hover:opacity-100 transition-opacity">
           <input type="file" accept=".csv" onChange={importData} ref={fileInputRef} className="hidden" />
           <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800">Import CSV</button>
           <button onClick={exportToCSV} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800">Export CSV</button>
           <button onClick={clearHistory} className="text-[10px] font-bold uppercase tracking-widest text-red-400">Wipe</button>
         </div>
+
       </div>
     </div>
   );
