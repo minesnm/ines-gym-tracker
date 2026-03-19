@@ -30,7 +30,6 @@ const IconTrash = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
-// Eye open — used when the exercise is hidden (tap to restore)
 const IconEye = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -38,7 +37,6 @@ const IconEye = ({ size = 14 }: { size?: number }) => (
   </svg>
 );
 
-// Eye with slash — used when the exercise is visible (tap to hide)
 const IconEyeOff = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
@@ -47,7 +45,6 @@ const IconEyeOff = ({ size = 14 }: { size?: number }) => (
   </svg>
 );
 
-// Pencil — rename button
 const IconPencil = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -55,7 +52,14 @@ const IconPencil = ({ size = 14 }: { size?: number }) => (
   </svg>
 );
 
+const IconCheck = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+);
+
 export default function GymTracker() {
+  const [isMounted, setIsMounted] = useState(false); // Fixes hydration error
   const [exercise, setExercise] = useState("");
   const [category, setCategory] = useState<"upper" | "lower" | "core">("lower");
   const [equipment, setEquipment] = useState<"free" | "machine" | "bodyweight">("free");
@@ -77,15 +81,8 @@ export default function GymTracker() {
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [selectedHeatmapDate, setSelectedHeatmapDate] = useState<string | null>(null);
 
-  // Which exercise groups are open in the Activity Log. All collapsed by default
-  // so the log opens as a clean scannable list of exercise names.
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-
-  // Hidden exercises: only affects pill visibility on the main page.
-  // History is always preserved.
   const [hiddenExercises, setHiddenExercises] = useState<string[]>([]);
-
-  // Editing state for Activity Log
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ date: "", weight: 0, sets: 0, reps: 0 });
 
@@ -96,6 +93,7 @@ export default function GymTracker() {
   });
 
   useEffect(() => {
+    setIsMounted(true);
     const saved = localStorage.getItem("boutiqueGymHistory");
     if (saved) setHistory(JSON.parse(saved));
     const savedHidden = localStorage.getItem("boutiqueGymHidden");
@@ -115,21 +113,16 @@ export default function GymTracker() {
   };
 
   const closeActivityLog = () => {
-    // If the dummy state is still there, navigating back will naturally close the log via the popstate listener
     if (window.history.state?.modal === "activityLog") {
       window.history.back();
     } else {
-      // Fallback in case history was manipulated
       setIsLogOpen(false);
     }
   };
 
   useEffect(() => {
     const handlePopState = () => {
-      // If the user triggers the system back gesture, we close the log
-      if (isLogOpen) {
-        setIsLogOpen(false);
-      }
+      if (isLogOpen) setIsLogOpen(false);
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
@@ -151,8 +144,6 @@ export default function GymTracker() {
     };
   }, [history]);
 
-  // Map to store the absolute latest timestamp each exercise was performed
-  // Used to calculate "Fatigue Fade" opacities.
   const exerciseLastDone = useMemo(() => {
     const map = new Map<string, number>();
     history.forEach(entry => {
@@ -165,7 +156,6 @@ export default function GymTracker() {
     return map;
   }, [history]);
 
-  // Sort history newest first so Set grabs the most recently performed exercises
   const recentHistory = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
   const groupedExercises = {
@@ -272,8 +262,6 @@ export default function GymTracker() {
     setEditingId(null);
   };
 
-  // Deletes one specific entry by id.
-  // isFromActiveCard resets the form when deleting via the button next to Save.
   const handleDeleteEntry = (id: string, isFromActiveCard = false) => {
     if (!confirm("Permanently delete this entry?")) return;
     triggerHaptic([50, 50]);
@@ -283,7 +271,6 @@ export default function GymTracker() {
     if (isFromActiveCard) { setExercise(""); setWeight(30); setSets(3); setReps(10); }
   };
 
-  // Renames every entry for a given exercise in one operation.
   const renameExercise = (oldName: string) => {
     const newName = window.prompt(`Rename "${oldName}" to:`, oldName);
     if (!newName || newName.trim() === "" || newName.trim() === oldName) return;
@@ -293,7 +280,6 @@ export default function GymTracker() {
     localStorage.setItem("boutiqueGymHistory", JSON.stringify(updated));
   };
 
-  // Toggles pill visibility on the main page. History is never affected.
   const toggleHideExercise = (name: string) => {
     triggerHaptic(30);
     const updated = hiddenExercises.includes(name)
@@ -644,6 +630,11 @@ export default function GymTracker() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────────
 
+  // Fix hydration issues by returning an empty div matching background until mounted
+  if (!isMounted) {
+    return <div className="min-h-screen bg-white"></div>;
+  }
+
   return (
     <div className="min-h-screen bg-white text-gray-700 p-6 font-sans flex flex-col items-center pt-12 pb-20">
       {renderActivityLog()}
@@ -788,8 +779,8 @@ export default function GymTracker() {
                         let styleClass;
                         
                         if (isToday) {
-                            // Active Today (Lightest - Ghosted gray)
-                            styleClass = "bg-gray-50 text-gray-400 border border-gray-100 opacity-50";
+                            // Active Today (Grey Background, Pink Text)
+                            styleClass = "bg-gray-50 text-[#E8B4B8] border border-gray-200";
                         } else if (hoursSince <= 48) {
                             // Fatigued (Last 48h - Light green wash)
                             styleClass = "bg-[#A9C2A3]/20 text-[#6B8565] ring-1 ring-[#A9C2A3]/30"; 
@@ -801,6 +792,7 @@ export default function GymTracker() {
                         return (
                           <button key={i} onClick={() => handleSelectPastExercise(ex, cat)}
                             className={`px-4 py-2 text-sm font-medium rounded-full flex items-center space-x-1.5 transition-all ${styleClass}`}>
+                            {isToday && <IconCheck size={14} />}
                             <span>{getEquipmentIcon(equipmentMap.get(ex))}</span>
                             <span>{ex}</span>
                           </button>
@@ -814,8 +806,10 @@ export default function GymTracker() {
             {/* Recovery Legend */}
             <div className="flex justify-center items-center space-x-4 pt-6 pb-1">
               <div className="flex items-center space-x-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-gray-100 border border-gray-200"></div>
-                <span className="text-[8px] uppercase tracking-widest font-bold text-gray-400">Today</span>
+                <div className="w-2.5 h-2.5 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center text-[#E8B4B8]">
+                   <IconCheck size={6} />
+                </div>
+                <span className="text-[8px] uppercase tracking-widest font-bold text-[#E8B4B8]">Today</span>
               </div>
               <div className="flex items-center space-x-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-[#A9C2A3]/20 ring-1 ring-[#A9C2A3]/30"></div>
