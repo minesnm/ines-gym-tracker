@@ -18,8 +18,6 @@ interface Workout {
 const normalize = (str: string) => str.toLowerCase().trim();
 
 // ─── SVG ICONS ────────────────────────────────────────────────────────────────
-// Using SVG throughout keeps the UI consistent and professional.
-// No emojis in interactive controls.
 
 const IconTrash = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -55,6 +53,39 @@ const IconPencil = ({ size = 14 }: { size?: number }) => (
 const IconCheck = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+);
+
+// Improved Equipment Icons
+const IconFreeWeight = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 12h6" />
+    <rect x="6" y="5" width="3" height="14" rx="1" />
+    <rect x="15" y="5" width="3" height="14" rx="1" />
+    <path d="M4 12h2" />
+    <path d="M18 12h2" />
+    <rect x="2" y="8" width="2" height="8" rx="1" />
+    <rect x="20" y="8" width="2" height="8" rx="1" />
+  </svg>
+);
+
+const IconMachine = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="4" width="10" height="4" rx="1" />
+    <rect x="5" y="10" width="10" height="4" rx="1" />
+    <rect x="5" y="16" width="10" height="4" rx="1" />
+    <path d="M10 2v20" />
+    <path d="M15 12h4" />
+    <path d="M19 11v2" />
+  </svg>
+);
+
+const IconBodyweight = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="5" r="1.5" />
+    <path d="m9 20 3-6 3 6" />
+    <path d="m6 8 6 2 6-2" />
+    <path d="M12 10v4" />
   </svg>
 );
 
@@ -168,7 +199,12 @@ export default function GymTracker() {
   history.forEach((e) => { equipmentMap.set(e.exercise, e.equipment || "free"); });
   const exercisesToday = new Set(history.filter((i) => isToday(i.date)).map((i) => i.exercise));
 
-  const getEquipmentIcon  = (eq?: string) => eq === "machine" ? "🔩" : eq === "bodyweight" ? "💪" : "🏋️";
+  const getEquipmentIcon = (eq?: string, size = 14) => {
+    if (eq === "machine") return <IconMachine size={size} />;
+    if (eq === "bodyweight") return <IconBodyweight size={size} />;
+    return <IconFreeWeight size={size} />;
+  };
+
   const getEquipmentLabel = (eq: string)  => eq === "machine" ? "Machine" : eq === "bodyweight" ? "Body" : "Weights";
 
   const calculateScore = (w: number, r: number) => w === 0 ? r : w * (1 + r / 30);
@@ -682,7 +718,7 @@ export default function GymTracker() {
                 className="flex-1 bg-gray-50/50 border border-gray-200 rounded-xl p-4 outline-none focus:border-[#E8B4B8] text-lg" />
               <button onClick={() => { triggerHaptic(20); setEquipment(equipment === "free" ? "machine" : equipment === "machine" ? "bodyweight" : "free"); }}
                 className="w-[64px] bg-gray-50 border border-gray-200 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xl mb-0.5">{getEquipmentIcon(equipment)}</span>
+                <span className="mb-1 text-gray-500">{getEquipmentIcon(equipment, 20)}</span>
                 <span className="text-[7px] uppercase tracking-widest text-gray-400 font-bold">{getEquipmentLabel(equipment)}</span>
               </button>
             </div>
@@ -792,8 +828,11 @@ export default function GymTracker() {
                         return (
                           <button key={i} onClick={() => handleSelectPastExercise(ex, cat)}
                             className={`px-4 py-2 text-sm font-medium rounded-full flex items-center space-x-1.5 transition-all ${styleClass}`}>
-                            {isToday && <IconCheck size={14} />}
-                            <span>{getEquipmentIcon(equipmentMap.get(ex))}</span>
+                            {isToday ? (
+                               <span className="text-[#E8B4B8]"><IconCheck size={14} /></span>
+                            ) : (
+                               <span className="opacity-70">{getEquipmentIcon(equipmentMap.get(ex), 14)}</span>
+                            )}
                             <span>{ex}</span>
                           </button>
                         );
