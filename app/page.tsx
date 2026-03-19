@@ -781,14 +781,11 @@ export default function GymTracker() {
                         if (isToday) {
                             // Active Today (Lightest - Ghosted gray)
                             styleClass = "bg-gray-50 text-gray-400 border border-gray-100 opacity-50";
-                        } else if (hoursSince < 24) {
-                            // Severely fatigued (0-24h - Light green wash)
+                        } else if (hoursSince <= 48) {
+                            // Fatigued (Last 48h - Light green wash)
                             styleClass = "bg-[#A9C2A3]/20 text-[#6B8565] ring-1 ring-[#A9C2A3]/30"; 
-                        } else if (hoursSince < 48) {
-                            // Partially fatigued (24-48h - Medium solid green)
-                            styleClass = "bg-[#A9C2A3]/60 text-white shadow-sm"; 
                         } else {
-                            // Fresh (48h+ - Solid green)
+                            // Fresh (Previous - Solid green)
                             styleClass = "bg-[#A9C2A3] text-white shadow-sm"; 
                         }
 
@@ -809,11 +806,11 @@ export default function GymTracker() {
             <div className="flex justify-center items-center space-x-4 pt-6 pb-1">
               <div className="flex items-center space-x-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-gray-100 border border-gray-200"></div>
-                <span className="text-[8px] uppercase tracking-widest font-bold text-gray-400">Last 24h</span>
+                <span className="text-[8px] uppercase tracking-widest font-bold text-gray-400">Today</span>
               </div>
               <div className="flex items-center space-x-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-[#A9C2A3]/50"></div>
-                <span className="text-[8px] uppercase tracking-widest font-bold text-gray-400">Last 48h</span>
+                <div className="w-2.5 h-2.5 rounded-full bg-[#A9C2A3]/20 ring-1 ring-[#A9C2A3]/30"></div>
+                <span className="text-[8px] uppercase tracking-widest font-bold text-[#6B8565]">Last 48h</span>
               </div>
               <div className="flex items-center space-x-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-[#A9C2A3]"></div>
