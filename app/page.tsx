@@ -352,6 +352,7 @@ const ActivityLog = ({
                                 <p className="text-sm font-bold text-[#E8B4B8]">Editing Entry</p>
                                 <input type="date" value={editForm.date}
                                   onChange={(e) => onEditFormChange({ ...editForm, date: e.target.value })}
+                                  onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); onSaveEdit(entry.id); } }}
                                   className="text-xs bg-gray-50 border border-gray-200 rounded-md p-1 outline-none text-gray-600" />
                               </div>
                               <div className="flex gap-2">
@@ -360,6 +361,7 @@ const ActivityLog = ({
                                     <p className="text-[9px] uppercase font-bold text-gray-400 text-center mb-1">{field}</p>
                                     <input type="number" value={editForm[field]}
                                       onChange={(e) => onEditFormChange({ ...editForm, [field]: Number(e.target.value) })}
+                                      onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); onSaveEdit(entry.id); } }}
                                       className="w-full bg-transparent text-center font-bold text-gray-800 outline-none" />
                                   </div>
                                 ))}
@@ -978,7 +980,7 @@ export default function GymTracker() {
               </div>
               <div className="flex items-center space-x-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-[#A9C2A3]" />
-                <span className="text-[8px] uppercase tracking-widest font-bold text-[#A9C2A3]">Previous</span>
+                <span className="text-[8px] uppercase tracking-widest font-bold text-[#A9C2A3]">Fresh</span>
               </div>
             </div>
 
