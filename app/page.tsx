@@ -208,11 +208,10 @@ export default function GymTracker() {
 
   // Sorted once inside useMemo — no separate recentHistory variable
   const groupedExercises = useMemo(() => {
-    const sorted = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     return {
-      upper: Array.from(new Set(sorted.filter((i) => i.category === "upper").map((i) => i.exercise))),
-      lower: Array.from(new Set(sorted.filter((i) => i.category === "lower").map((i) => i.exercise))),
-      core:  Array.from(new Set(sorted.filter((i) => i.category === "core" ).map((i) => i.exercise))),
+      upper: Array.from(new Set(historySorted.filter((i) => i.category === "upper").map((i) => i.exercise))),
+      lower: Array.from(new Set(historySorted.filter((i) => i.category === "lower").map((i) => i.exercise))),
+      core:  Array.from(new Set(historySorted.filter((i) => i.category === "core" ).map((i) => i.exercise))),
     };
   }, [history]);
 
@@ -227,6 +226,17 @@ export default function GymTracker() {
     [history]
   );
 
+  // Two pre-sorted views of history — computed once, reused everywhere.
+  // Previously the array was re-sorted independently in 5+ places.
+  const historySorted = useMemo(
+    () => [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [history]
+  );
+  const historyChronological = useMemo(
+    () => [...history].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [history]
+  );
+
   // Autocomplete: matches history exercise names containing the current input.
   // Returns empty when input < 2 chars or an exact match already exists.
   const suggestions = useMemo(() => {
@@ -235,8 +245,7 @@ export default function GymTracker() {
     const norm = normalize(trimmed);
     if (history.some((e) => normalize(e.exercise) === norm)) return [];
     const seen = new Set<string>();
-    return [...history]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return [...historySorted]
       .reduce<string[]>((acc, e) => {
         if (!seen.has(e.exercise) && normalize(e.exercise).includes(norm)) {
           seen.add(e.exercise);
@@ -246,6 +255,54 @@ export default function GymTracker() {
       }, [])
       .slice(0, 5);
   }, [exercise, history]);
+
+  // ─── HEATMAP DATA (memoized) ─────────────────────────────────────────────────
+  // Previously computed inside renderHeatmap() on every render.
+  // Now only recomputes when history changes.
+  const heatmapData = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dow = today.getDay();
+    const start = new Date(today); start.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) - 21);
+    const days: Date[] = []; const cur = new Date(start);
+    for (let i = 0; i < 28; i++) { days.push(new Date(cur)); cur.setDate(cur.getDate() + 1); }
+
+    const lastSeen = new Map<string, Workout>(), bestScore = new Map<string, number>();
+    const dayStats = new Map<number, { total: number; progress: number }>();
+    historyChronological.forEach((entry) => {
+      const d = new Date(entry.date); d.setHours(0, 0, 0, 0); const ts = d.getTime();
+      if (!dayStats.has(ts)) dayStats.set(ts, { total: 0, progress: 0 });
+      const stats = dayStats.get(ts)!; stats.total++;
+      const prev = lastSeen.get(entry.exercise);
+      const score = calculateScore(entry.weight, entry.reps);
+      const best = bestScore.get(entry.exercise) || 0;
+      const progress = (score > best && best > 0) || (!!prev && (
+        entry.weight > prev.weight ||
+        (entry.weight === prev.weight && entry.sets > prev.sets) ||
+        (entry.weight === prev.weight && entry.sets === prev.sets && entry.reps > prev.reps)
+      ));
+      if (progress) stats.progress++;
+      lastSeen.set(entry.exercise, entry);
+      if (score > best) bestScore.set(entry.exercise, score);
+    });
+
+    const weeks: Date[][] = [];
+    for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+    return { today, weeks, dayStats };
+  }, [history]);
+
+  // ─── ACTIVITY LOG DATA (memoized) ─────────────────────────────────────────────
+  // Previously regrouped on every render inside renderActivityLog().
+  const activityLogGroups = useMemo(() => {
+    const grouped = new Map<string, Workout[]>();
+    [...historySorted]
+      .forEach((entry) => {
+        if (!grouped.has(entry.exercise)) grouped.set(entry.exercise, []);
+        grouped.get(entry.exercise)!.push(entry);
+      });
+    return Array.from(grouped.entries()).sort(
+      (a, b) => new Date(b[1][0].date).getTime() - new Date(a[1][0].date).getTime()
+    );
+  }, [history]);
 
   // ─── EFFECTS ──────────────────────────────────────────────────────────────────
 
@@ -305,17 +362,13 @@ export default function GymTracker() {
   const handleSelectPastExercise = (exName: string, cat: "upper" | "lower" | "core") => {
     triggerHaptic(20); setExercise(exName); setCategory(cat);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
-    const recent = [...history]
-      .filter((e) => normalize(e.exercise) === normalize(exName))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    const recent = historySorted.find((e) => normalize(e.exercise) === normalize(exName));
     if (recent) { setWeight(recent.weight); setSets(recent.sets); setReps(recent.reps); setEquipment(recent.equipment || "free"); }
   };
 
   const handleSelectSuggestion = (name: string) => {
     triggerHaptic(20);
-    const recent = [...history]
-      .filter((e) => normalize(e.exercise) === normalize(name))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    const recent = historySorted.find((e) => normalize(e.exercise) === normalize(name));
     setExercise(name);
     if (recent) {
       setCategory(recent.category);
@@ -327,10 +380,17 @@ export default function GymTracker() {
     setShowSuggestions(false);
   };
 
-  // Single source of truth for persisting history
+  // Debounced localStorage write — setHistory is immediate so the UI updates
+  // instantly, but the actual disk write is deferred 400ms. This avoids
+  // blocking the main thread on every rapid Save tap.
+  const lsWriteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const saveHistory = (updated: Workout[]) => {
     setHistory(updated);
-    localStorage.setItem("boutiqueGymHistory", JSON.stringify(updated));
+    if (lsWriteTimer.current) clearTimeout(lsWriteTimer.current);
+    lsWriteTimer.current = setTimeout(() => {
+      localStorage.setItem("boutiqueGymHistory", JSON.stringify(updated));
+    }, 400);
   };
 
   const handleSave = () => {
@@ -469,33 +529,7 @@ export default function GymTracker() {
 
   const renderHeatmap = () => {
     if (!showHeatmap) return null;
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const dow = today.getDay();
-    const start = new Date(today); start.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) - 21);
-    const days: Date[] = []; const cur = new Date(start);
-    for (let i = 0; i < 28; i++) { days.push(new Date(cur)); cur.setDate(cur.getDate() + 1); }
-    const sorted = [...history].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const lastSeen = new Map<string, Workout>(), bestScore = new Map<string, number>();
-    const dayStats = new Map<number, { total: number; progress: number }>();
-    sorted.forEach((entry) => {
-      const d = new Date(entry.date); d.setHours(0, 0, 0, 0); const ts = d.getTime();
-      if (!dayStats.has(ts)) dayStats.set(ts, { total: 0, progress: 0 });
-      const stats = dayStats.get(ts)!; stats.total++;
-      const prev = lastSeen.get(entry.exercise);
-      const score = calculateScore(entry.weight, entry.reps);
-      const best = bestScore.get(entry.exercise) || 0;
-      const progress = (score > best && best > 0) || (!!prev && (
-        entry.weight > prev.weight ||
-        (entry.weight === prev.weight && entry.sets > prev.sets) ||
-        (entry.weight === prev.weight && entry.sets === prev.sets && entry.reps > prev.reps)
-      ));
-      if (progress) stats.progress++;
-      lastSeen.set(entry.exercise, entry);
-      if (score > best) bestScore.set(entry.exercise, score);
-    });
-    const weeks: Date[][] = [];
-    for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
-
+    const { today, weeks, dayStats } = heatmapData;
     return (
       // ref attached here so the scroll effect can find this element
       <div ref={heatmapRef} className="mt-4 p-5 bg-white rounded-3xl border border-gray-100 flex flex-col items-center shadow-sm w-full">
@@ -553,17 +587,7 @@ export default function GymTracker() {
   const renderActivityLog = () => {
     if (!isLogOpen) return null;
 
-    const grouped = new Map<string, Workout[]>();
-    [...history]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .forEach((entry) => {
-        if (!grouped.has(entry.exercise)) grouped.set(entry.exercise, []);
-        grouped.get(entry.exercise)!.push(entry);
-      });
-
-    const sortedGroups = Array.from(grouped.entries()).sort(
-      (a, b) => new Date(b[1][0].date).getTime() - new Date(a[1][0].date).getTime()
-    );
+    const sortedGroups = activityLogGroups;
 
     return (
       <div className="fixed inset-0 z-50 flex flex-col justify-end">
