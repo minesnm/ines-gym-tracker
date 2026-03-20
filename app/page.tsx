@@ -259,7 +259,7 @@ interface ActivityLogProps {
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onExport: () => void;
   onClearHistory: () => void;
-  fileInputRef: React.RefObject<HTMLInputElement>;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
 }
 const ActivityLog = ({
   history, hiddenExercises, expandedGroups, editingId, editForm, todayRecord,
@@ -689,7 +689,7 @@ export default function GymTracker() {
   const toggleGroup = (name: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
-      next.has(name) ? next.delete(name) : next.add(name);
+      if (next.has(name)) { next.delete(name); } else { next.add(name); }
       return next;
     });
   };
