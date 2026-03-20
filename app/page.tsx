@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 
+// ─── TYPES ────────────────────────────────────────────────────────────────────
+
 interface Workout {
   id: string;
   exercise: string;
@@ -13,8 +15,25 @@ interface Workout {
   date: string;
 }
 
-// Single normalize function — lowercase + trim.
+// ─── PURE HELPERS (outside component — stable, never recreated on render) ─────
+
 const normalize = (str: string) => str.toLowerCase().trim();
+
+// Outside the component so it's never recreated and is safe inside
+// useMemo/useEffect dependency arrays without warnings.
+const isToday = (dateString: string) => {
+  const d1 = new Date(dateString), d2 = new Date();
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  );
+};
+
+const calculateScore = (w: number, r: number) => w === 0 ? r : w * (1 + r / 30);
+
+const getEquipmentLabel = (eq: string) =>
+  eq === "machine" ? "Machine" : eq === "bodyweight" ? "Body" : "Weights";
 
 // ─── SVG ICONS ────────────────────────────────────────────────────────────────
 
@@ -22,8 +41,7 @@ const IconTrash = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6" />
     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    <line x1="10" y1="11" x2="10" y2="17" />
-    <line x1="14" y1="11" x2="14" y2="17" />
+    <line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
   </svg>
 );
 
@@ -51,51 +69,43 @@ const IconPencil = ({ size = 14 }: { size?: number }) => (
 
 const IconCheck = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"></polyline>
+    <polyline points="20 6 9 17 4 12" />
   </svg>
 );
 
 const IconFreeWeight = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 12h6" />
-    <rect x="6" y="5" width="3" height="14" rx="1" />
+    <path d="M9 12h6" /><rect x="6" y="5" width="3" height="14" rx="1" />
     <rect x="15" y="5" width="3" height="14" rx="1" />
-    <path d="M4 12h2" />
-    <path d="M18 12h2" />
-    <rect x="2" y="8" width="2" height="8" rx="1" />
-    <rect x="20" y="8" width="2" height="8" rx="1" />
+    <path d="M4 12h2" /><path d="M18 12h2" />
+    <rect x="2" y="8" width="2" height="8" rx="1" /><rect x="20" y="8" width="2" height="8" rx="1" />
   </svg>
 );
 
 const IconMachine = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="5" y="4" width="10" height="4" rx="1" />
-    <rect x="5" y="10" width="10" height="4" rx="1" />
-    <rect x="5" y="16" width="10" height="4" rx="1" />
-    <path d="M10 2v20" />
-    <path d="M15 12h4" />
-    <path d="M19 11v2" />
+    <rect x="5" y="4" width="10" height="4" rx="1" /><rect x="5" y="10" width="10" height="4" rx="1" />
+    <rect x="5" y="16" width="10" height="4" rx="1" /><path d="M10 2v20" />
+    <path d="M15 12h4" /><path d="M19 11v2" />
   </svg>
 );
 
 const IconBodyweight = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="5" r="1.5" />
-    <path d="m9 20 3-6 3 6" />
-    <path d="m6 8 6 2 6-2" />
-    <path d="M12 10v4" />
+    <circle cx="12" cy="5" r="1.5" /><path d="m9 20 3-6 3 6" />
+    <path d="m6 8 6 2 6-2" /><path d="M12 10v4" />
   </svg>
 );
 
-// Dynamically renders the proper equipment icon
 const EquipmentIcon = ({ eq, size = 14 }: { eq?: string; size?: number }) => {
-  if (eq === "machine") return <IconMachine size={size} />;
+  if (eq === "machine")    return <IconMachine size={size} />;
   if (eq === "bodyweight") return <IconBodyweight size={size} />;
   return <IconFreeWeight size={size} />;
 };
 
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+
 export default function GymTracker() {
-  const [isMounted, setIsMounted] = useState(false); // Fixes hydration error
   const [exercise, setExercise] = useState("");
   const [category, setCategory] = useState<"upper" | "lower" | "core">("lower");
   const [equipment, setEquipment] = useState<"free" | "machine" | "bodyweight">("free");
@@ -116,22 +126,24 @@ export default function GymTracker() {
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [selectedHeatmapDate, setSelectedHeatmapDate] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [hiddenExercises, setHiddenExercises] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ date: "", weight: 0, sets: 0, reps: 0 });
 
-  const [showSuggestions, setShowSuggestions] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Ref used to scroll the heatmap into view when it opens
+  const heatmapRef = useRef<HTMLDivElement>(null);
 
+  // suppressHydrationWarning on the h1 handles the only server/client mismatch
+  // (the date string). No need for isMounted to blank the whole page.
   const todayStr = new Date().toLocaleDateString("en-US", {
     weekday: "long", month: "short", day: "numeric",
   });
 
   useEffect(() => {
-    setIsMounted(true);
     const saved = localStorage.getItem("boutiqueGymHistory");
     if (saved) setHistory(JSON.parse(saved));
     const savedHidden = localStorage.getItem("boutiqueGymHidden");
@@ -143,55 +155,37 @@ export default function GymTracker() {
     }
   }, []);
 
-  // ─── NATIVE UX HELPERS ───────────────────────────────────────────────────────
-  
-  const handleFocusSelect = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.target.select();
-  };
-
-  const blurKeyboard = () => {
-    if (typeof document !== 'undefined') {
-      (document.activeElement as HTMLElement)?.blur();
+  // Scroll the heatmap into view whenever it becomes visible
+  useEffect(() => {
+    if (showHeatmap && heatmapRef.current) {
+      setTimeout(() => {
+        heatmapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50); // small delay lets the element render first
     }
-  };
+  }, [showHeatmap]);
 
-  const handleEnterToSave = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      blurKeyboard();
-      if (exercise.trim().length >= 2) {
-        setTimeout(() => handleSave(), 10);
-      }
-    }
-  };
-
+  // Native back-gesture closes the log modal on mobile
   const openActivityLog = () => {
     window.history.pushState({ modal: "activityLog" }, "");
     setIsLogOpen(true);
   };
-
   const closeActivityLog = () => {
-    if (window.history.state?.modal === "activityLog") {
-      window.history.back();
-    } else {
-      setIsLogOpen(false);
-    }
+    if (window.history.state?.modal === "activityLog") window.history.back();
+    else setIsLogOpen(false);
   };
-
   useEffect(() => {
-    const handlePopState = () => {
-      if (isLogOpen) setIsLogOpen(false);
-    };
+    const handlePopState = () => { if (isLogOpen) setIsLogOpen(false); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, [isLogOpen]);
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ─── KEYBOARD HELPERS ─────────────────────────────────────────────────────────
 
-  const isToday = (dateString: string) => {
-    const d1 = new Date(dateString), d2 = new Date();
-    return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
-  };
+  const handleFocusSelect = (e: React.FocusEvent<HTMLInputElement>) => e.target.select();
+
+  const blurKeyboard = () => (document.activeElement as HTMLElement)?.blur();
+
+  // ─── DERIVED DATA (all memoized — only recompute when history changes) ────────
 
   const todaySummary = useMemo(() => {
     const t = history.filter((i) => isToday(i.date));
@@ -204,32 +198,37 @@ export default function GymTracker() {
 
   const exerciseLastDone = useMemo(() => {
     const map = new Map<string, number>();
-    history.forEach(entry => {
+    history.forEach((entry) => {
       const time = new Date(entry.date).getTime();
-      const existing = map.get(entry.exercise) || 0;
-      if (time > existing) {
+      if (!map.has(entry.exercise) || map.get(entry.exercise)! < time)
         map.set(entry.exercise, time);
-      }
     });
     return map;
   }, [history]);
 
-  const recentHistory = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  
-  const groupedExercises = {
-    upper: Array.from(new Set(recentHistory.filter((i) => i.category === "upper").map((i) => i.exercise))),
-    lower: Array.from(new Set(recentHistory.filter((i) => i.category === "lower").map((i) => i.exercise))),
-    core:  Array.from(new Set(recentHistory.filter((i) => i.category === "core" ).map((i) => i.exercise))),
-  };
+  // Sorted once inside useMemo — no separate recentHistory variable
+  const groupedExercises = useMemo(() => {
+    const sorted = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return {
+      upper: Array.from(new Set(sorted.filter((i) => i.category === "upper").map((i) => i.exercise))),
+      lower: Array.from(new Set(sorted.filter((i) => i.category === "lower").map((i) => i.exercise))),
+      core:  Array.from(new Set(sorted.filter((i) => i.category === "core" ).map((i) => i.exercise))),
+    };
+  }, [history]);
 
-  const equipmentMap = new Map<string, string>();
-  history.forEach((e) => { equipmentMap.set(e.exercise, e.equipment || "free"); });
-  const exercisesToday = new Set(history.filter((i) => isToday(i.date)).map((i) => i.exercise));
+  const equipmentMap = useMemo(() => {
+    const map = new Map<string, string>();
+    history.forEach((e) => { map.set(e.exercise, e.equipment || "free"); });
+    return map;
+  }, [history]);
 
-  const getEquipmentLabel = (eq: string)  => eq === "machine" ? "Machine" : eq === "bodyweight" ? "Body" : "Weights";
+  const exercisesToday = useMemo(
+    () => new Set(history.filter((i) => isToday(i.date)).map((i) => i.exercise)),
+    [history]
+  );
 
-  const calculateScore = (w: number, r: number) => w === 0 ? r : w * (1 + r / 30);
-
+  // Autocomplete: matches history exercise names containing the current input.
+  // Returns empty when input < 2 chars or an exact match already exists.
   const suggestions = useMemo(() => {
     const trimmed = exercise.trim();
     if (trimmed.length < 2) return [];
@@ -245,8 +244,10 @@ export default function GymTracker() {
         }
         return acc;
       }, [])
-      .slice(0, 5); 
+      .slice(0, 5);
   }, [exercise, history]);
+
+  // ─── EFFECTS ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (exercise.trim().length < 2) {
@@ -263,7 +264,6 @@ export default function GymTracker() {
       setTodayRecord(tRecord); setLastRecord(lRecord);
       const ref = tRecord || lRecord;
       if (ref) { setCategory(ref.category); setEquipment(ref.equipment || "free"); }
-      
       const dailyMax = new Map<number, { date: string; weight: number; reps: number; score: number }>();
       matches.forEach((e) => {
         const d = new Date(e.date); d.setHours(0, 0, 0, 0);
@@ -282,26 +282,39 @@ export default function GymTracker() {
     const s = typeof sets   === "number" ? sets   : 0;
     const r = typeof reps   === "number" ? reps   : 0;
     setIsPR(calculateScore(w, r) > maxHistoricalScore && maxHistoricalScore > 0);
-    setSuccessMode(!!lastRecord && (w > lastRecord.weight || (w === lastRecord.weight && s > lastRecord.sets) || (w === lastRecord.weight && s === lastRecord.sets && r > lastRecord.reps)));
+    setSuccessMode(!!lastRecord && (
+      w > lastRecord.weight ||
+      (w === lastRecord.weight && s > lastRecord.sets) ||
+      (w === lastRecord.weight && s === lastRecord.sets && r > lastRecord.reps)
+    ));
   }, [weight, sets, reps, lastRecord, maxHistoricalScore]);
 
-  const triggerHaptic = (p: number | number[]) => { if (typeof window !== "undefined" && window.navigator?.vibrate) window.navigator.vibrate(p); };
+  // ─── HANDLERS ─────────────────────────────────────────────────────────────────
 
-  const handleIncrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { triggerHaptic(30); setter(typeof val === "number" ? val + 1 : 1); };
-  const handleDecrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => { triggerHaptic(30); setter(typeof val === "number" && val > 0 ? val - 1 : 0); };
+  const triggerHaptic = (p: number | number[]) => {
+    if (typeof window !== "undefined" && window.navigator?.vibrate) window.navigator.vibrate(p);
+  };
+
+  const handleIncrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => {
+    triggerHaptic(30); setter(typeof val === "number" ? val + 1 : 1);
+  };
+  const handleDecrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => {
+    triggerHaptic(30); setter(typeof val === "number" && val > 0 ? val - 1 : 0);
+  };
 
   const handleSelectPastExercise = (exName: string, cat: "upper" | "lower" | "core") => {
     triggerHaptic(20); setExercise(exName); setCategory(cat);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
-    const recent = [...history].filter((e) => normalize(e.exercise) === normalize(exName)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    const recent = [...history]
+      .filter((e) => normalize(e.exercise) === normalize(exName))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
     if (recent) { setWeight(recent.weight); setSets(recent.sets); setReps(recent.reps); setEquipment(recent.equipment || "free"); }
   };
 
   const handleSelectSuggestion = (name: string) => {
     triggerHaptic(20);
-    const norm = normalize(name);
     const recent = [...history]
-      .filter((e) => normalize(e.exercise) === norm)
+      .filter((e) => normalize(e.exercise) === normalize(name))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
     setExercise(name);
     if (recent) {
@@ -314,6 +327,7 @@ export default function GymTracker() {
     setShowSuggestions(false);
   };
 
+  // Single source of truth for persisting history
   const saveHistory = (updated: Workout[]) => {
     setHistory(updated);
     localStorage.setItem("boutiqueGymHistory", JSON.stringify(updated));
@@ -333,47 +347,34 @@ export default function GymTracker() {
     setTimeout(() => setIsSaved(false), 1500);
   };
 
+  const handleDeleteEntry = (id: string, isFromActiveCard = false) => {
+    if (!confirm("Permanently delete this entry?")) return;
+    triggerHaptic([50, 50]);
+    saveHistory(history.filter((e) => e.id !== id));
+    if (isFromActiveCard) { setExercise(""); setWeight(30); setSets(3); setReps(10); }
+  };
+
   const startEditing = (entry: Workout) => {
     triggerHaptic(20);
     setEditingId(entry.id);
-    setEditForm({
-      date: entry.date.split('T')[0], 
-      weight: entry.weight,
-      sets: entry.sets,
-      reps: entry.reps
-    });
+    setEditForm({ date: entry.date.split("T")[0], weight: entry.weight, sets: entry.sets, reps: entry.reps });
   };
 
   const saveEdit = (id: string) => {
     triggerHaptic([50, 50]);
-    const updatedHistory = history.map(h => {
-      if (h.id === id) {
-        const updatedDate = new Date(`${editForm.date}T12:00:00`).toISOString();
-        return { ...h, weight: Number(editForm.weight), sets: Number(editForm.sets), reps: Number(editForm.reps), date: updatedDate };
-      }
-      return h;
-    });
-    setHistory(updatedHistory);
-    localStorage.setItem("boutiqueGymHistory", JSON.stringify(updatedHistory));
+    saveHistory(history.map((h) => h.id !== id ? h : {
+      ...h,
+      weight: Number(editForm.weight), sets: Number(editForm.sets), reps: Number(editForm.reps),
+      date: new Date(`${editForm.date}T12:00:00`).toISOString(),
+    }));
     setEditingId(null);
-  };
-
-  const handleDeleteEntry = (id: string, isFromActiveCard = false) => {
-    if (!confirm("Permanently delete this entry?")) return;
-    triggerHaptic([50, 50]);
-    const updated = history.filter((e) => e.id !== id);
-    setHistory(updated);
-    localStorage.setItem("boutiqueGymHistory", JSON.stringify(updated));
-    if (isFromActiveCard) { setExercise(""); setWeight(30); setSets(3); setReps(10); }
   };
 
   const renameExercise = (oldName: string) => {
     const newName = window.prompt(`Rename "${oldName}" to:`, oldName);
     if (!newName || newName.trim() === "" || newName.trim() === oldName) return;
     triggerHaptic(50);
-    const updated = history.map((e) => normalize(e.exercise) === normalize(oldName) ? { ...e, exercise: newName.trim() } : e);
-    setHistory(updated);
-    localStorage.setItem("boutiqueGymHistory", JSON.stringify(updated));
+    saveHistory(history.map((e) => normalize(e.exercise) === normalize(oldName) ? { ...e, exercise: newName.trim() } : e));
   };
 
   const toggleHideExercise = (name: string) => {
@@ -386,14 +387,10 @@ export default function GymTracker() {
   };
 
   const toggleGroup = (name: string) => {
-    setExpandedGroups((prev) => { 
-      const next = new Set(prev); 
-      if (next.has(name)) {
-        next.delete(name);
-      } else {
-        next.add(name);
-      }
-      return next; 
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) { next.delete(name); } else { next.add(name); }
+      return next;
     });
   };
 
@@ -421,7 +418,7 @@ export default function GymTracker() {
           return [{ id: crypto.randomUUID(), date: isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString(), exercise: ex?.trim() || "Unknown", category: (cat?.trim() || "lower") as "upper" | "lower" | "core", equipment: (eq?.trim() || "free") as "free" | "machine" | "bodyweight", weight: Number(wt) || 0, sets: Number(st) || 0, reps: Number(rp) || 0 }];
         });
         if (workouts.length > 0 && confirm(`Parsed ${workouts.length} records. Overwrite current history?`)) {
-          setHistory(workouts); localStorage.setItem("boutiqueGymHistory", JSON.stringify(workouts)); triggerHaptic([50, 100, 50]);
+          saveHistory(workouts); triggerHaptic([50, 100, 50]);
         }
         if (fileInputRef.current) fileInputRef.current.value = "";
       } catch { alert("Import failed. The CSV may be corrupted."); }
@@ -429,7 +426,9 @@ export default function GymTracker() {
     reader.readAsText(file);
   };
 
-  const clearHistory = () => { if (confirm("Wipe all data?")) { setHistory([]); localStorage.removeItem("boutiqueGymHistory"); } };
+  const clearHistory = () => {
+    if (confirm("Wipe all data?")) { setHistory([]); localStorage.removeItem("boutiqueGymHistory"); }
+  };
 
   // ─── GRAPH ────────────────────────────────────────────────────────────────────
 
@@ -439,7 +438,11 @@ export default function GymTracker() {
     const scores = chartData.map((d) => d.score);
     const maxS = Math.max(...scores), minS = Math.min(...scores);
     const yR = maxS === minS ? 1 : maxS - minS;
-    const pts = chartData.map((d, i) => ({ x: px + (i / (chartData.length - 1)) * (W - px * 2), y: H - py - ((d.score - minS) / yR) * (H - py * 2), ...d }));
+    const pts = chartData.map((d, i) => ({
+      x: px + (i / (chartData.length - 1)) * (W - px * 2),
+      y: H - py - ((d.score - minS) / yR) * (H - py * 2),
+      ...d,
+    }));
     return (
       <div className="mt-5 pt-4 border-t border-gray-100/50">
         <div className="flex justify-between items-center mb-4">
@@ -450,7 +453,9 @@ export default function GymTracker() {
           <path d={`M ${pts.map((p) => `${p.x} ${p.y}`).join(" L ")}`} fill="none" stroke="#A9C2A3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-50" />
           {pts.map((p, i) => (
             <g key={i}>
-              <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="10" fontWeight="bold" fill="#4B5563">{p.weight > 0 ? `${p.weight}x${p.reps}` : `${p.reps}r`}</text>
+              <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="10" fontWeight="bold" fill="#4B5563">
+                {p.weight > 0 ? `${p.weight}x${p.reps}` : `${p.reps}r`}
+              </text>
               <circle cx={p.x} cy={p.y} r="4" fill="#E8B4B8" stroke="white" strokeWidth="1.5" />
               <text x={p.x} y={H - 2} textAnchor="middle" fontSize="9" fill="#9CA3AF" fontWeight="600">{p.date}</text>
             </g>
@@ -472,7 +477,6 @@ export default function GymTracker() {
     const sorted = [...history].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const lastSeen = new Map<string, Workout>(), bestScore = new Map<string, number>();
     const dayStats = new Map<number, { total: number; progress: number }>();
-    
     sorted.forEach((entry) => {
       const d = new Date(entry.date); d.setHours(0, 0, 0, 0); const ts = d.getTime();
       if (!dayStats.has(ts)) dayStats.set(ts, { total: 0, progress: 0 });
@@ -480,16 +484,21 @@ export default function GymTracker() {
       const prev = lastSeen.get(entry.exercise);
       const score = calculateScore(entry.weight, entry.reps);
       const best = bestScore.get(entry.exercise) || 0;
-      
-      const progress = (score > best && best > 0) || (!!prev && (entry.weight > prev.weight || (entry.weight === prev.weight && entry.sets > prev.sets) || (entry.weight === prev.weight && entry.sets === prev.sets && entry.reps > prev.reps)));
+      const progress = (score > best && best > 0) || (!!prev && (
+        entry.weight > prev.weight ||
+        (entry.weight === prev.weight && entry.sets > prev.sets) ||
+        (entry.weight === prev.weight && entry.sets === prev.sets && entry.reps > prev.reps)
+      ));
       if (progress) stats.progress++;
-      
       lastSeen.set(entry.exercise, entry);
       if (score > best) bestScore.set(entry.exercise, score);
     });
-    const weeks: Date[][] = []; for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+    const weeks: Date[][] = [];
+    for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+
     return (
-      <div className="mt-4 p-5 bg-white rounded-3xl border border-gray-100 flex flex-col items-center shadow-sm w-full">
+      // ref attached here so the scroll effect can find this element
+      <div ref={heatmapRef} className="mt-4 p-5 bg-white rounded-3xl border border-gray-100 flex flex-col items-center shadow-sm w-full">
         <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-4">Progression Calendar</p>
         <div className="w-full max-w-[280px]">
           <div className="flex mb-2">
@@ -500,7 +509,9 @@ export default function GymTracker() {
           </div>
           {weeks.map((week, wi) => (
             <div key={wi} className="flex items-center mb-2">
-              <div className="w-10 text-[8px] font-bold text-gray-400 text-right pr-2">{week[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+              <div className="w-10 text-[8px] font-bold text-gray-400 text-right pr-2">
+                {week[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </div>
               <div className="flex-1 grid grid-cols-7 gap-2">
                 {week.map((d) => {
                   const ts = d.getTime(), s = dayStats.get(ts) || { total: 0, progress: 0 };
@@ -521,7 +532,9 @@ export default function GymTracker() {
           ))}
         </div>
         <div className="h-4 mt-3 flex items-center justify-center">
-          <p className={`text-[9px] font-bold uppercase tracking-widest ${selectedHeatmapDate ? "text-[#E8B4B8]" : "text-gray-300"}`}>{selectedHeatmapDate || "Tap a square for details"}</p>
+          <p className={`text-[9px] font-bold uppercase tracking-widest ${selectedHeatmapDate ? "text-[#E8B4B8]" : "text-gray-300"}`}>
+            {selectedHeatmapDate || "Tap a square for details"}
+          </p>
         </div>
         <div className="flex items-center justify-center space-x-4 mt-3 text-[8px] uppercase tracking-widest text-gray-400 font-bold w-full border-t border-gray-50 pt-4">
           {[["bg-gray-100/50", "Rest"], ["bg-[#A9C2A3]/40", "Maintain"], ["bg-[#A9C2A3]", "Progress"]].map(([bg, label]) => (
@@ -554,25 +567,20 @@ export default function GymTracker() {
 
     return (
       <div className="fixed inset-0 z-50 flex flex-col justify-end">
-        {/* Animated Backdrop */}
         <div
           className="absolute inset-0 bg-white/60 backdrop-blur-sm"
           style={{ animation: "fadeInBlur 0.3s ease-out forwards" }}
           onClick={closeActivityLog}
         />
-
-        {/* Animated Bottom Sheet */}
         <div
           className="relative w-full h-[92vh] bg-gray-50 rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] overflow-y-auto pb-20"
           style={{ animation: "slideUpModal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards" }}
         >
-          {/* Pull Bar */}
           <div className="sticky top-0 w-full pt-4 pb-2 bg-gray-50 z-10 flex justify-center rounded-t-[2rem] cursor-pointer" onClick={closeActivityLog}>
             <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
           </div>
 
           <div className="p-6 max-w-md mx-auto pt-2">
-            {/* Header */}
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-2xl font-light text-gray-800">Activity Log</h2>
               <button onClick={closeActivityLog} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-800 bg-white border border-gray-200 px-4 py-2 rounded-full shadow-sm">
@@ -591,7 +599,6 @@ export default function GymTracker() {
 
                 return (
                   <div key={exName} className={`rounded-2xl border transition-all ${isHidden ? "opacity-60" : ""} bg-white border-gray-100 shadow-sm`}>
-                    {/* Summary Header */}
                     <div onClick={() => toggleGroup(exName)} className="p-4 cursor-pointer flex justify-between items-center">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
@@ -604,9 +611,9 @@ export default function GymTracker() {
                             {isHidden ? "HIDDEN" : "HIDE"}
                           </button>
                           {entries.length > 1 && (
-                             <span className="text-[9px] uppercase tracking-widest font-bold text-[#A9C2A3] bg-[#A9C2A3]/10 px-2 py-0.5 rounded-full">
-                                {entries.length} ENTRIES
-                             </span>
+                            <span className="text-[9px] uppercase tracking-widest font-bold text-[#A9C2A3] bg-[#A9C2A3]/10 px-2 py-0.5 rounded-full">
+                              {entries.length} ENTRIES
+                            </span>
                           )}
                         </div>
                         <p className="text-base font-bold text-gray-800 mb-1 flex items-baseline gap-1.5">
@@ -620,11 +627,10 @@ export default function GymTracker() {
                         </p>
                       </div>
                       <div className="text-gray-300 shrink-0 ml-4 transition-transform duration-200" style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                       </div>
                     </div>
 
-                    {/* Expanded: History & Edit Controls */}
                     {isExpanded && (
                       <div className="border-t border-gray-50 bg-gray-50/50">
                         <div className="px-4 py-2 border-b border-gray-50 flex justify-between items-center">
@@ -633,89 +639,60 @@ export default function GymTracker() {
                             onClick={(e) => { e.stopPropagation(); renameExercise(exName); }}
                             className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-blue-500 transition-colors"
                           >
-                            <IconPencil size={12}/> RENAME ALL
+                            <IconPencil size={12} /> RENAME ALL
                           </button>
                         </div>
-
                         <div className="divide-y divide-gray-50">
                           {entries.map((entry) => (
-                            <div key={entry.id} className={`p-4 flex flex-col transition-all ${editingId === entry.id ? 'bg-white shadow-sm' : ''}`}>
+                            <div key={entry.id} className={`p-4 flex flex-col transition-all ${editingId === entry.id ? "bg-white shadow-sm" : ""}`}>
                               {editingId === entry.id ? (
-                                <div className="flex flex-col gap-4 animate-fade-in">
+                                <div className="flex flex-col gap-4">
                                   <div className="flex justify-between items-center">
                                     <p className="text-sm font-bold text-[#E8B4B8]">Editing Entry</p>
-                                    <input 
-                                      type="date" 
-                                      value={editForm.date} 
-                                      onChange={(e) => setEditForm({...editForm, date: e.target.value})} 
-                                      onKeyDown={(e) => { 
-                                        if (e.key === 'Enter') { 
-                                          e.preventDefault(); 
-                                          document.getElementById(`edit-weight-${entry.id}`)?.focus(); 
-                                        } 
+                                    <input
+                                      type="date"
+                                      value={editForm.date}
+                                      onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          document.getElementById(`edit-weight-${entry.id}`)?.focus();
+                                        }
                                       }}
-                                      className="text-xs bg-gray-50 border border-gray-200 rounded-md p-1 outline-none text-gray-600" 
+                                      className="text-xs bg-gray-50 border border-gray-200 rounded-md p-1 outline-none text-gray-600"
                                     />
                                   </div>
                                   <div className="flex gap-2">
-                                    <div className="flex-1 bg-gray-50 rounded-xl p-2 border border-gray-100">
-                                      <p className="text-[9px] uppercase font-bold text-gray-400 text-center mb-1">Weight</p>
-                                      <input 
-                                        id={`edit-weight-${entry.id}`}
-                                        type="number" 
-                                        inputMode="decimal"
-                                        enterKeyHint="next"
-                                        value={editForm.weight} 
-                                        onChange={(e) => setEditForm({...editForm, weight: Number(e.target.value)})} 
-                                        onFocus={handleFocusSelect}
-                                        onKeyDown={(e) => { 
-                                          if (e.key === 'Enter') { 
-                                            e.preventDefault(); 
-                                            document.getElementById(`edit-sets-${entry.id}`)?.focus(); 
-                                          } 
-                                        }}
-                                        className="w-full bg-transparent text-center font-bold text-gray-800 outline-none" 
-                                      />
-                                    </div>
-                                    <div className="flex-1 bg-gray-50 rounded-xl p-2 border border-gray-100">
-                                      <p className="text-[9px] uppercase font-bold text-gray-400 text-center mb-1">Sets</p>
-                                      <input 
-                                        id={`edit-sets-${entry.id}`}
-                                        type="number" 
-                                        inputMode="numeric"
-                                        enterKeyHint="next"
-                                        value={editForm.sets} 
-                                        onChange={(e) => setEditForm({...editForm, sets: Number(e.target.value)})} 
-                                        onFocus={handleFocusSelect}
-                                        onKeyDown={(e) => { 
-                                          if (e.key === 'Enter') { 
-                                            e.preventDefault(); 
-                                            document.getElementById(`edit-reps-${entry.id}`)?.focus(); 
-                                          } 
-                                        }}
-                                        className="w-full bg-transparent text-center font-bold text-gray-800 outline-none" 
-                                      />
-                                    </div>
-                                    <div className="flex-1 bg-gray-50 rounded-xl p-2 border border-gray-100">
-                                      <p className="text-[9px] uppercase font-bold text-gray-400 text-center mb-1">Reps</p>
-                                      <input 
-                                        id={`edit-reps-${entry.id}`}
-                                        type="number" 
-                                        inputMode="numeric"
-                                        enterKeyHint="done"
-                                        value={editForm.reps} 
-                                        onChange={(e) => setEditForm({...editForm, reps: Number(e.target.value)})} 
-                                        onFocus={handleFocusSelect}
-                                        onKeyDown={(e) => { 
-                                          if (e.key === 'Enter') { 
-                                            e.preventDefault(); 
-                                            blurKeyboard(); 
-                                            setTimeout(() => saveEdit(entry.id), 10); 
-                                          } 
-                                        }}
-                                        className="w-full bg-transparent text-center font-bold text-gray-800 outline-none" 
-                                      />
-                                    </div>
+                                    {(["weight", "sets", "reps"] as const).map((field, fi) => {
+                                      const ids = ["weight", "sets", "reps"];
+                                      const nextId = ids[fi + 1] ? `edit-${ids[fi + 1]}-${entry.id}` : null;
+                                      return (
+                                        <div key={field} className="flex-1 bg-gray-50 rounded-xl p-2 border border-gray-100">
+                                          <p className="text-[9px] uppercase font-bold text-gray-400 text-center mb-1">{field}</p>
+                                          <input
+                                            id={`edit-${field}-${entry.id}`}
+                                            type="text"
+                                            inputMode={field === "weight" ? "decimal" : "numeric"}
+                                            enterKeyHint={nextId ? "next" : "done"}
+                                            value={editForm[field]}
+                                            onChange={(e) => setEditForm({ ...editForm, [field]: Number(e.target.value) })}
+                                            onFocus={handleFocusSelect}
+                                            onKeyDown={(e) => {
+                                              if (e.key === "Enter") {
+                                                e.preventDefault();
+                                                if (nextId) {
+                                                  document.getElementById(nextId)?.focus();
+                                                } else {
+                                                  blurKeyboard();
+                                                  setTimeout(() => saveEdit(entry.id), 10);
+                                                }
+                                              }
+                                            }}
+                                            className="w-full bg-transparent text-center font-bold text-gray-800 outline-none"
+                                          />
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                   <div className="flex justify-end gap-2 mt-2">
                                     <button onClick={() => setEditingId(null)} className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600">Cancel</button>
@@ -753,7 +730,6 @@ export default function GymTracker() {
               })}
             </div>
 
-            {/* Data Management Utilities */}
             <div className="mt-12 pt-8 border-t border-gray-200/60 flex justify-center items-center space-x-6">
               <input type="file" accept=".csv" onChange={importData} ref={fileInputRef} className="hidden" />
               <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-800 transition-colors">Import CSV</button>
@@ -766,7 +742,7 @@ export default function GymTracker() {
     );
   };
 
-  // ─── BADGE & CARD ─────────────────────────────────────────────────────────────
+  // ─── BADGE & CARD STYLE ───────────────────────────────────────────────────────
 
   const displayRecord = todayRecord || lastRecord;
   let cardBorder = "border-gray-100", cardBg = "bg-white", badge = null;
@@ -783,11 +759,6 @@ export default function GymTracker() {
   }
 
   // ─── RENDER ───────────────────────────────────────────────────────────────────
-
-  // Fix hydration issues by returning an empty div matching background until mounted
-  if (!isMounted) {
-    return <div className="min-h-screen bg-white"></div>;
-  }
 
   return (
     <div className="min-h-screen bg-white text-gray-700 p-6 font-sans flex flex-col items-center pt-12 pb-20">
@@ -807,12 +778,10 @@ export default function GymTracker() {
       <div className="w-full max-w-md space-y-8">
 
         <div className="text-center space-y-2">
-          {/* suppressHydrationWarning tells Next.js to ignore the timezone shift between server/client text */}
           <h1 suppressHydrationWarning className="text-3xl font-light tracking-wide text-gray-800">{todayStr}</h1>
           <p className="text-sm text-gray-400">Log your workout, track your progress.</p>
         </div>
 
-        {/* Last record / Today's log card */}
         {displayRecord && (
           <div className={`p-6 rounded-3xl transition-all duration-300 shadow-sm border ${cardBorder} ${cardBg}`}>
             <div className="flex justify-between items-center mb-1">
@@ -832,7 +801,6 @@ export default function GymTracker() {
           </div>
         )}
 
-        {/* Input form */}
         <div className="space-y-6">
           <div className="flex flex-col space-y-3">
             <div className="flex space-x-2">
@@ -844,7 +812,6 @@ export default function GymTracker() {
               ))}
             </div>
             <div className="flex space-x-2">
-              {/* Autocomplete wrapper — position:relative so the dropdown anchors to the input */}
               <div className="flex-1 relative">
                 <input
                   id="exercise-input"
@@ -855,15 +822,14 @@ export default function GymTracker() {
                   onChange={(e) => { setExercise(e.target.value); setShowSuggestions(true); }}
                   onFocus={() => setShowSuggestions(true)}
                   onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                  onKeyDown={(e) => { 
-                    if (e.key === 'Enter') { 
-                      e.preventDefault(); 
-                      document.getElementById('weight-input')?.focus(); 
-                    } 
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      document.getElementById("weight-input")?.focus();
+                    }
                   }}
                   className="w-full bg-gray-50/50 border border-gray-200 rounded-xl p-4 outline-none focus:border-[#E8B4B8] text-lg"
                 />
-                {/* Dropdown — only renders when there are suggestions and input is focused */}
                 {showSuggestions && suggestions.length > 0 && (
                   <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-10">
                     {suggestions.map((name) => {
@@ -900,51 +866,43 @@ export default function GymTracker() {
             </div>
           </div>
 
-          {/* Weight */}
           <div className="flex items-center justify-between bg-gray-50/50 border border-gray-200 rounded-2xl p-2 min-h-[60px]">
             <button onClick={() => handleDecrement(setWeight, weight)} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">-</button>
             <div className="flex items-baseline justify-center flex-1">
-              <input 
+              <input
                 id="weight-input"
-                type="number" 
+                type="number"
                 inputMode="decimal"
                 enterKeyHint="next"
-                value={weight} 
+                value={weight}
                 onChange={(e) => setWeight(e.target.value === "" ? "" : Number(e.target.value))}
                 onFocus={handleFocusSelect}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    document.getElementById('sets-input')?.focus();
-                  }
+                  if (e.key === "Enter") { e.preventDefault(); document.getElementById("sets-input")?.focus(); }
                 }}
-                className="w-16 text-right bg-transparent outline-none font-semibold text-3xl text-gray-800" 
+                className="w-16 text-right bg-transparent outline-none font-semibold text-3xl text-gray-800"
               />
               <span className="text-sm font-bold text-gray-400 ml-1.5 uppercase tracking-wide">kg</span>
             </div>
             <button onClick={() => handleIncrement(setWeight, weight)} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">+</button>
           </div>
 
-          {/* Sets & Reps */}
           <div className="flex space-x-4">
             <div className="flex-1 bg-gray-50/50 border border-gray-200 rounded-2xl p-2 flex items-center justify-between shadow-sm">
               <button onClick={() => handleDecrement(setSets, sets)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">-</button>
               <div className="flex items-baseline justify-center">
-                <input 
+                <input
                   id="sets-input"
-                  type="number" 
+                  type="number"
                   inputMode="numeric"
                   enterKeyHint="next"
-                  value={sets} 
+                  value={sets}
                   onChange={(e) => setSets(e.target.value === "" ? "" : Number(e.target.value))}
                   onFocus={handleFocusSelect}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      document.getElementById('reps-input')?.focus();
-                    }
+                    if (e.key === "Enter") { e.preventDefault(); document.getElementById("reps-input")?.focus(); }
                   }}
-                  className="w-10 text-right bg-transparent outline-none font-semibold text-2xl text-gray-800" 
+                  className="w-10 text-right bg-transparent outline-none font-semibold text-2xl text-gray-800"
                 />
                 <span className="text-xs font-bold text-gray-400 ml-1.5 uppercase tracking-wide">sets</span>
               </div>
@@ -954,24 +912,22 @@ export default function GymTracker() {
             <div className="flex-1 bg-gray-50/50 border border-gray-200 rounded-2xl p-2 flex items-center justify-between shadow-sm">
               <button onClick={() => handleDecrement(setReps, reps)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">-</button>
               <div className="flex items-baseline justify-center">
-                <input 
+                <input
                   id="reps-input"
-                  type="number" 
+                  type="number"
                   inputMode="numeric"
                   enterKeyHint="done"
-                  value={reps} 
+                  value={reps}
                   onChange={(e) => setReps(e.target.value === "" ? "" : Number(e.target.value))}
                   onFocus={handleFocusSelect}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === "Enter") {
                       e.preventDefault();
                       blurKeyboard();
-                      if (exercise.trim().length >= 2) {
-                        setTimeout(() => handleSave(), 10);
-                      }
+                      if (exercise.trim().length >= 2) setTimeout(() => handleSave(), 10);
                     }
                   }}
-                  className="w-full text-right bg-transparent outline-none font-semibold text-2xl text-gray-800 max-w-[40px]" 
+                  className="w-10 text-right bg-transparent outline-none font-semibold text-2xl text-gray-800"
                 />
                 <span className="text-xs font-bold text-gray-400 ml-1.5 uppercase tracking-wide">reps</span>
               </div>
@@ -980,7 +936,6 @@ export default function GymTracker() {
           </div>
         </div>
 
-        {/* Save row — trash icon only appears when there is a today entry to undo */}
         <div className="flex gap-3 mt-4">
           {todayRecord && (
             <button onClick={() => handleDeleteEntry(todayRecord.id, true)}
@@ -995,7 +950,6 @@ export default function GymTracker() {
           </button>
         </div>
 
-        {/* Empty state / history */}
         {history.length === 0 ? (
           <div className="pt-8 border-t border-gray-100 space-y-4">
             <div className="bg-gray-50 p-6 rounded-3xl border border-gray-200 shadow-sm space-y-5">
@@ -1030,7 +984,6 @@ export default function GymTracker() {
               </div>
             </div>
 
-            {/* Exercise pills — hidden exercises filtered out silently */}
             {(["lower", "upper", "core"] as const).map((cat) =>
               groupedExercises[cat].filter((ex) => !hiddenExercises.includes(ex)).length > 0 && (
                 <div key={cat} className="space-y-2 mt-4">
@@ -1041,29 +994,25 @@ export default function GymTracker() {
                       .map((ex, i) => {
                         const lastDoneTime = exerciseLastDone.get(ex) || 0;
                         const hoursSince = (Date.now() - lastDoneTime) / (1000 * 60 * 60);
-                        const isToday = exercisesToday.has(ex);
-                
+                        // Named doneToday to avoid shadowing the isToday() function above
+                        const doneToday = exercisesToday.has(ex);
+
                         let styleClass;
-                        
-                        if (isToday) {
-                            // Active Today (Grey Background, Pink Text)
-                            styleClass = "bg-gray-50 text-[#E8B4B8] border border-gray-200";
+                        if (doneToday) {
+                          styleClass = "bg-gray-50 text-[#E8B4B8] border border-gray-200";
                         } else if (hoursSince <= 48) {
-                            // Fatigued (Last 48h - Light green wash)
-                            styleClass = "bg-[#A9C2A3]/20 text-[#6B8565] ring-1 ring-[#A9C2A3]/30"; 
+                          styleClass = "bg-[#A9C2A3]/20 text-[#6B8565] ring-1 ring-[#A9C2A3]/30";
                         } else {
-                            // Fresh (Previous - Solid green)
-                            styleClass = "bg-[#A9C2A3] text-white shadow-sm"; 
+                          styleClass = "bg-[#A9C2A3] text-white shadow-sm";
                         }
 
                         return (
                           <button key={i} onClick={() => handleSelectPastExercise(ex, cat)}
                             className={`px-4 py-2 text-sm font-medium rounded-full flex items-center space-x-1.5 transition-all ${styleClass}`}>
-                            {isToday ? (
-                               <span className="text-[#E8B4B8]"><IconCheck size={14} /></span>
-                            ) : (
-                               <span className="opacity-70"><EquipmentIcon eq={equipmentMap.get(ex)} size={14} /></span>
-                            )}
+                            {doneToday
+                              ? <span className="text-[#E8B4B8]"><IconCheck size={14} /></span>
+                              : <span className="opacity-70"><EquipmentIcon eq={equipmentMap.get(ex)} size={14} /></span>
+                            }
                             <span>{ex}</span>
                           </button>
                         );
@@ -1073,21 +1022,18 @@ export default function GymTracker() {
               )
             )}
 
-            {/* Recovery Legend */}
             <div className="flex justify-center items-center space-x-4 pt-6 pb-1">
               <div className="flex items-center space-x-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center text-[#E8B4B8]">
-                   <IconCheck size={6} />
-                </div>
+                <div className="w-2.5 h-2.5 rounded-full bg-gray-50 border border-gray-200" />
                 <span className="text-[8px] uppercase tracking-widest font-bold text-[#E8B4B8]">Today</span>
               </div>
               <div className="flex items-center space-x-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-[#A9C2A3]/20 ring-1 ring-[#A9C2A3]/30"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-[#A9C2A3]/20 ring-1 ring-[#A9C2A3]/30" />
                 <span className="text-[8px] uppercase tracking-widest font-bold text-[#6B8565]">Last 48h</span>
               </div>
               <div className="flex items-center space-x-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-[#A9C2A3]"></div>
-                <span className="text-[8px] uppercase tracking-widest font-bold text-[#A9C2A3]">Previous</span>
+                <div className="w-2.5 h-2.5 rounded-full bg-[#A9C2A3]" />
+                <span className="text-[8px] uppercase tracking-widest font-bold text-[#A9C2A3]">Fresh</span>
               </div>
             </div>
 
@@ -1095,7 +1041,9 @@ export default function GymTracker() {
               <button onClick={openActivityLog} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
                 Activity Log
               </button>
-              <button onClick={() => setShowHeatmap(!showHeatmap)} className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
+              <button
+                onClick={() => setShowHeatmap(!showHeatmap)}
+                className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 border border-gray-200 px-5 py-2.5 rounded-full shadow-sm">
                 {showHeatmap ? "Hide Calendar" : "Progression Calendar"}
               </button>
             </div>
@@ -1103,7 +1051,6 @@ export default function GymTracker() {
             {renderHeatmap()}
           </div>
         )}
-
       </div>
     </div>
   );
