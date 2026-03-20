@@ -359,8 +359,12 @@ const ActivityLog = ({
                                 {(["weight", "sets", "reps"] as const).map((field) => (
                                   <div key={field} className="flex-1 bg-gray-50 rounded-xl p-2 border border-gray-100">
                                     <p className="text-[9px] uppercase font-bold text-gray-400 text-center mb-1">{field}</p>
-                                    <input type="number" value={editForm[field]}
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={editForm[field]}
                                       onChange={(e) => onEditFormChange({ ...editForm, [field]: Number(e.target.value) })}
+                                      onFocus={(e) => e.target.select()}
                                       onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); onSaveEdit(entry.id); } }}
                                       className="w-full bg-transparent text-center font-bold text-gray-800 outline-none" />
                                   </div>
@@ -861,7 +865,7 @@ export default function GymTracker() {
           <div className="flex items-center justify-between bg-gray-50/50 border border-gray-200 rounded-2xl p-2 min-h-[60px]">
             <button onClick={() => handleDecrement(setWeight, weight)} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">-</button>
             <div className="flex items-baseline justify-center flex-1">
-              <input type="number" value={weight} onChange={(e) => setWeight(e.target.value === "" ? "" : Number(e.target.value))} className="w-16 text-right bg-transparent outline-none font-semibold text-3xl text-gray-800" />
+              <input type="number" value={weight} onChange={(e) => setWeight(e.target.value === "" ? "" : Number(e.target.value))} onFocus={(e) => e.target.select()} className="w-16 text-right bg-transparent outline-none font-semibold text-3xl text-gray-800" />
               <span className="text-sm font-bold text-gray-400 ml-1.5 uppercase tracking-wide">kg</span>
             </div>
             <button onClick={() => handleIncrement(setWeight, weight)} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">+</button>
@@ -872,7 +876,7 @@ export default function GymTracker() {
               <div key={label} className="flex-1 bg-gray-50/50 border border-gray-200 rounded-2xl p-2 flex items-center justify-between shadow-sm">
                 <button onClick={() => handleDecrement(setter, val)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">-</button>
                 <div className="flex items-baseline justify-center">
-                  <input type="number" value={val} onChange={(e) => setter(e.target.value === "" ? "" : Number(e.target.value))} className="w-10 text-right bg-transparent outline-none font-semibold text-2xl text-gray-800" />
+                  <input type="number" value={val} onChange={(e) => setter(e.target.value === "" ? "" : Number(e.target.value))} onFocus={(e) => e.target.select()} className="w-10 text-right bg-transparent outline-none font-semibold text-2xl text-gray-800" />
                   <span className="text-xs font-bold text-gray-400 ml-1.5 uppercase tracking-wide">{label}</span>
                 </div>
                 <button onClick={() => handleIncrement(setter, val)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">+</button>
