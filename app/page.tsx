@@ -440,6 +440,9 @@ export default function GymTracker() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ date: "", weight: 0, sets: 0, reps: 0 });
 
+  // Autocomplete: controls dropdown visibility
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // FIX 5: suppressHydrationWarning on the date element is cleaner than hiding
@@ -521,6 +524,29 @@ export default function GymTracker() {
     [history]
   );
 
+  // Autocomplete suggestions: all known exercise names that fuzzy-match the
+  // current input, sorted by most recently used. Empty when input is blank,
+  // an exact match exists (no point suggesting what you've already typed),
+  // or fewer than 2 characters have been entered.
+  const suggestions = useMemo(() => {
+    const trimmed = exercise.trim();
+    if (trimmed.length < 2) return [];
+    const norm = normalize(trimmed);
+    // Exact match — the user has already selected or typed a known name
+    if (history.some((e) => normalize(e.exercise) === norm)) return [];
+    const seen = new Set<string>();
+    return [...history]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .reduce<string[]>((acc, e) => {
+        if (!seen.has(e.exercise) && normalize(e.exercise).includes(norm)) {
+          seen.add(e.exercise);
+          acc.push(e.exercise);
+        }
+        return acc;
+      }, [])
+      .slice(0, 5); // cap at 5 suggestions
+  }, [exercise, history]);
+
   useEffect(() => {
     if (exercise.trim().length < 2) {
       setLastRecord(null); setTodayRecord(null); setMaxHistoricalScore(0); setChartData([]);
@@ -579,6 +605,25 @@ export default function GymTracker() {
       .filter((e) => normalize(e.exercise) === normalize(exName))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
     if (recent) { setWeight(recent.weight); setSets(recent.sets); setReps(recent.reps); setEquipment(recent.equipment || "free"); }
+  };
+
+  // Selecting a suggestion fills the form exactly like tapping a pill —
+  // name, category, equipment, and last-used numbers all pre-filled.
+  const handleSelectSuggestion = (name: string) => {
+    triggerHaptic(20);
+    const norm = normalize(name);
+    const recent = [...history]
+      .filter((e) => normalize(e.exercise) === norm)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    setExercise(name);
+    if (recent) {
+      setCategory(recent.category);
+      setEquipment(recent.equipment || "free");
+      setWeight(recent.weight);
+      setSets(recent.sets);
+      setReps(recent.reps);
+    }
+    setShowSuggestions(false);
   };
 
   const saveHistory = (updated: Workout[]) => {
@@ -763,8 +808,45 @@ export default function GymTracker() {
               ))}
             </div>
             <div className="flex space-x-2">
-              <input type="text" placeholder="e.g., Leg Press" value={exercise} onChange={(e) => setExercise(e.target.value)}
-                className="flex-1 bg-gray-50/50 border border-gray-200 rounded-xl p-4 outline-none focus:border-[#E8B4B8] text-lg" />
+              {/* Autocomplete wrapper — position:relative so the dropdown anchors to the input */}
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  placeholder="e.g., Leg Press"
+                  value={exercise}
+                  onChange={(e) => { setExercise(e.target.value); setShowSuggestions(true); }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  className="w-full bg-gray-50/50 border border-gray-200 rounded-xl p-4 outline-none focus:border-[#E8B4B8] text-lg"
+                />
+                {/* Dropdown — only renders when there are suggestions and input is focused */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-10">
+                    {suggestions.map((name) => {
+                      const eq = equipmentMap.get(name);
+                      const lastTime = exerciseLastDone.get(name);
+                      const daysAgo = lastTime ? Math.floor((Date.now() - lastTime) / (1000 * 60 * 60 * 24)) : null;
+                      return (
+                        <button
+                          key={name}
+                          onMouseDown={() => handleSelectSuggestion(name)}
+                          className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-gray-400"><EquipmentIcon eq={eq} size={13} /></span>
+                            <span className="text-sm font-medium text-gray-700">{name}</span>
+                          </div>
+                          {daysAgo !== null && (
+                            <span className="text-[10px] font-semibold text-gray-400 shrink-0 ml-2">
+                              {daysAgo === 0 ? "today" : daysAgo === 1 ? "yesterday" : `${daysAgo}d ago`}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => { triggerHaptic(20); setEquipment(equipment === "free" ? "machine" : equipment === "machine" ? "bodyweight" : "free"); }}
                 className="w-[64px] bg-gray-50 border border-gray-200 rounded-xl flex flex-col items-center justify-center gap-1">
@@ -896,7 +978,7 @@ export default function GymTracker() {
               </div>
               <div className="flex items-center space-x-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-[#A9C2A3]" />
-                <span className="text-[8px] uppercase tracking-widest font-bold text-[#A9C2A3]">Fresh</span>
+                <span className="text-[8px] uppercase tracking-widest font-bold text-[#A9C2A3]">Previous</span>
               </div>
             </div>
 
