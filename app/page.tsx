@@ -148,11 +148,7 @@ export default function GymTracker() {
     if (saved) setHistory(JSON.parse(saved));
     const savedHidden = localStorage.getItem("boutiqueGymHidden");
     if (savedHidden) setHiddenExercises(JSON.parse(savedHidden));
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js")
-        .then(() => console.log("Offline mode activated!"))
-        .catch((err) => console.error("Offline mode failed:", err));
-    }
+
   }, []);
 
   // Scroll the heatmap into view whenever it becomes visible
@@ -206,6 +202,24 @@ export default function GymTracker() {
     return map;
   }, [history]);
 
+  // Two pre-sorted views of history — computed once, reused everywhere.
+  // Previously the array was re-sorted independently in 5+ places.
+  const historySorted = useMemo(
+    () =>
+      [...history].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      ),
+    [history]
+  );
+  const historyChronological = useMemo(
+    () =>
+      [...history].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      ),
+    [history]
+  );
+
+
   // Sorted once inside useMemo — no separate recentHistory variable
   const groupedExercises = useMemo(() => {
     return {
@@ -223,17 +237,6 @@ export default function GymTracker() {
 
   const exercisesToday = useMemo(
     () => new Set(history.filter((i) => isToday(i.date)).map((i) => i.exercise)),
-    [history]
-  );
-
-  // Two pre-sorted views of history — computed once, reused everywhere.
-  // Previously the array was re-sorted independently in 5+ places.
-  const historySorted = useMemo(
-    () => [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    [history]
-  );
-  const historyChronological = useMemo(
-    () => [...history].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
     [history]
   );
 
@@ -981,14 +984,14 @@ export default function GymTracker() {
               <p className="text-sm text-gray-500 leading-relaxed">Everything here is private and lives strictly on your device.</p>
               <ul className="text-xs text-gray-500 leading-relaxed space-y-3 bg-white p-4 rounded-2xl border border-gray-100">
                 {[
-                  ["Tag your set", "Choose a muscle group and tap the equipment icon to switch between weights, machine, and bodyweight."],
-                  ["Log your first set", "above to start tracking."],
-                  ["Beat last time", "to see the card turn green."],
-                  ["Hit an all-time high", "to unlock a pink PR badge."],
-                  ["Save to your home screen", "to use it completely offline."],
-                ].map(([strong, rest]) => (
+                  ["🎯", "Tag your set", "Choose a muscle group and tap the equipment icon to switch between weights, machine, and bodyweight."],
+                  ["📝", "Log your first set", "above to start tracking."],
+                  ["📈", "Beat last time", "to see the card turn green."],
+                  ["✨", "Hit an all-time high", "to unlock a pink PR badge."],
+                  ["📲", "Save to your home screen", "to use it completely offline."],
+                ].map(([emoji, strong, rest]) => (
                   <li key={strong} className="flex gap-2">
-                    <span className="text-gray-300 shrink-0">·</span>
+                    <span className="shrink-0">{emoji}</span>
                     <span><strong>{strong}</strong> {rest}</span>
                   </li>
                 ))}
