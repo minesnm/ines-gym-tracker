@@ -192,6 +192,18 @@ export default function GymTracker() {
     };
   }, [history]);
 
+  // Count PRs achieved today: for each exercise logged today, check if its
+  // score beats the best score from all previous (non-today) sessions.
+  const todayPRs = useMemo(() => {
+    const todayEntries = history.filter((e) => isToday(e.date));
+    return todayEntries.filter((entry) => {
+      const previousBest = history
+        .filter((e) => !isToday(e.date) && normalize(e.exercise) === normalize(entry.exercise))
+        .reduce((best, e) => Math.max(best, calculateScore(e.weight, e.reps)), 0);
+      return previousBest > 0 && calculateScore(entry.weight, entry.reps) > previousBest;
+    }).length;
+  }, [history]);
+
   const exerciseLastDone = useMemo(() => {
     const map = new Map<string, number>();
     history.forEach((entry) => {
@@ -977,6 +989,25 @@ export default function GymTracker() {
           </button>
         </div>
 
+        {/* Session summary — only shown after at least one exercise is logged today */}
+        {(todaySummary.upper + todaySummary.lower + todaySummary.core) > 0 && (
+          <div className="rounded-2xl bg-gray-50 border border-gray-100 px-5 py-4">
+            <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400 mb-2">Today&apos;s Session</p>
+            <div className="flex items-center justify-between">
+              <div className="flex gap-3 text-[11px] font-bold uppercase tracking-widest">
+                {todaySummary.upper > 0 && <span className="text-[#E8B4B8]">{todaySummary.upper} Upper</span>}
+                {todaySummary.lower > 0 && <span className="text-[#A9C2A3]">{todaySummary.lower} Lower</span>}
+                {todaySummary.core > 0 && <span className="text-[#7A9374]">{todaySummary.core} Core</span>}
+              </div>
+              {todayPRs > 0 && (
+                <span className="text-[10px] font-bold uppercase tracking-widest bg-[#E8B4B8]/15 text-[#E8B4B8] px-2.5 py-1 rounded-full">
+                  ✨ {todayPRs} {todayPRs === 1 ? "PR" : "PRs"}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {history.length === 0 ? (
           <div className="pt-8 border-t border-gray-100 space-y-4">
             <div className="bg-gray-50 p-6 rounded-3xl border border-gray-200 shadow-sm space-y-5">
@@ -988,6 +1019,8 @@ export default function GymTracker() {
                   ["📝", "Log your first set", "above to start tracking."],
                   ["📈", "Beat last time", "to see the card turn green."],
                   ["✨", "Hit an all-time high", "to unlock a pink PR badge."],
+                  ["📜", "Activity Log", "tap it below to edit entries, rename exercises, or hide ones you no longer do."],
+                  ["📊", "Progression Calendar", "shows your consistency and progress over the last 4 weeks."],
                   ["📲", "Save to your home screen", "to use it completely offline."],
                 ].map(([emoji, strong, rest]) => (
                   <li key={strong} className="flex gap-2">
@@ -996,19 +1029,24 @@ export default function GymTracker() {
                   </li>
                 ))}
               </ul>
+
+              {/* Import CSV — useful for migrating from another device */}
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-[10px] text-gray-400 text-center mb-2 uppercase tracking-widest font-semibold">Migrating from another device?</p>
+
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full text-[11px] font-bold uppercase tracking-widest text-gray-500 bg-white border border-gray-200 rounded-xl py-2.5 hover:bg-gray-50 transition-colors"
+                >
+                  Import CSV
+                </button>
+              </div>
             </div>
           </div>
         ) : (
           <div className="pt-8 border-t border-gray-100 space-y-4">
-            <div className="text-center space-y-2">
+            <div className="text-center">
               <h2 className="text-xs uppercase tracking-[0.2em] text-gray-400">Your Exercises</h2>
-              <div className="flex justify-center space-x-3 text-[10px] font-bold uppercase tracking-widest">
-                <span className={todaySummary.upper > 0 ? "text-[#E8B4B8]" : "text-gray-300"}>{todaySummary.upper} Upper</span>
-                <span className="text-gray-200">·</span>
-                <span className={todaySummary.lower > 0 ? "text-[#A9C2A3]" : "text-gray-300"}>{todaySummary.lower} Lower</span>
-                <span className="text-gray-200">·</span>
-                <span className={todaySummary.core > 0 ? "text-[#7A9374]" : "text-gray-300"}>{todaySummary.core} Core</span>
-              </div>
             </div>
 
             {(["lower", "upper", "core"] as const).map((cat) =>
