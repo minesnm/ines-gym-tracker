@@ -418,7 +418,7 @@ export default function GymTracker() {
       : [...history, { id: crypto.randomUUID(), exercise: exercise.trim(), category, equipment, weight: Number(weight) || 0, sets: Number(sets) || 0, reps: Number(reps) || 0, date: new Date().toISOString() }];
     saveHistory(updated);
     setExercise(""); setWeight(""); setSets(""); setReps("");
-    setSuccessMode(false); setIsPR(false); setIsSaved(true); setShowHeatmap(true);
+    setSuccessMode(false); setIsPR(false); setIsSaved(true);
     setTimeout(() => setIsSaved(false), 1500);
   };
 
