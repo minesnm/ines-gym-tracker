@@ -367,11 +367,49 @@ export default function GymTracker() {
     if (typeof window !== "undefined" && window.navigator?.vibrate) window.navigator.vibrate(p);
   };
 
-  const handleIncrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => {
-    triggerHaptic(30); setter(typeof val === "number" ? val + 1 : 1);
+  const handleIncrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "", step = 1) => {
+    triggerHaptic(step > 1 ? [20, 20] : 30);
+    setter(typeof val === "number" ? val + step : step);
   };
-  const handleDecrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "") => {
-    triggerHaptic(30); setter(typeof val === "number" && val > 0 ? val - 1 : 0);
+  const handleDecrement = (setter: React.Dispatch<React.SetStateAction<number | "">>, val: number | "", step = 1) => {
+    triggerHaptic(step > 1 ? [20, 20] : 30);
+    setter(typeof val === "number" && val > 0 ? Math.max(0, val - step) : 0);
+  };
+
+  // Long-press button props factory.
+  // Short tap → ±1. Long press (>400ms) → ±5 with a distinct double haptic.
+  //
+  // Two important fixes vs the previous implementation:
+  //   1. useRef is called here at the top level, not inside a helper function —
+  //      that was a Rules of Hooks violation.
+  //   2. val is read via a getter at fire time, not captured in a stale closure —
+  //      so rapid +/- taps always operate on the latest value.
+  const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lpFired = useRef(false);
+
+  const makeLongPress = (
+    setter: React.Dispatch<React.SetStateAction<number | "">>,
+    getVal: () => number | "",
+    direction: "inc" | "dec"
+  ) => {
+    const start = () => {
+      lpFired.current = false;
+      lpTimer.current = setTimeout(() => {
+        lpFired.current = true;
+        const v = getVal();
+        direction === "inc" ? handleIncrement(setter, v, 5) : handleDecrement(setter, v, 5);
+      }, 400);
+    };
+    const cancel = () => { if (lpTimer.current) clearTimeout(lpTimer.current); };
+    const handleClick = () => {
+      if (lpFired.current) { lpFired.current = false; return; }
+      const v = getVal();
+      direction === "inc" ? handleIncrement(setter, v) : handleDecrement(setter, v);
+    };
+    return {
+      onMouseDown: start, onMouseUp: cancel, onMouseLeave: cancel,
+      onTouchStart: start, onTouchEnd: cancel, onClick: handleClick,
+    };
   };
 
   const handleSelectPastExercise = (exName: string, cat: "upper" | "lower" | "core") => {
@@ -906,7 +944,7 @@ export default function GymTracker() {
           </div>
 
           <div className="flex items-center justify-between bg-gray-50/50 border border-gray-200 rounded-2xl p-2 min-h-[60px]">
-            <button onClick={() => handleDecrement(setWeight, weight)} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">-</button>
+            <button {...makeLongPress(setWeight, () => weight, "dec")} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">-</button>
             <div className="flex items-baseline justify-center flex-1">
               <input
                 id="weight-input"
@@ -923,12 +961,12 @@ export default function GymTracker() {
               />
               <span className="text-sm font-bold text-gray-400 ml-1.5 uppercase tracking-wide">kg</span>
             </div>
-            <button onClick={() => handleIncrement(setWeight, weight)} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">+</button>
+            <button {...makeLongPress(setWeight, () => weight, "inc")} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">+</button>
           </div>
 
           <div className="flex space-x-4">
             <div className="flex-1 bg-gray-50/50 border border-gray-200 rounded-2xl p-2 flex items-center justify-between shadow-sm">
-              <button onClick={() => handleDecrement(setSets, sets)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">-</button>
+              <button {...makeLongPress(setSets, () => sets, "dec")} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">-</button>
               <div className="flex items-baseline justify-center">
                 <input
                   id="sets-input"
@@ -945,11 +983,11 @@ export default function GymTracker() {
                 />
                 <span className="text-xs font-bold text-gray-400 ml-1.5 uppercase tracking-wide">sets</span>
               </div>
-              <button onClick={() => handleIncrement(setSets, sets)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">+</button>
+              <button {...makeLongPress(setSets, () => sets, "inc")} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">+</button>
             </div>
 
             <div className="flex-1 bg-gray-50/50 border border-gray-200 rounded-2xl p-2 flex items-center justify-between shadow-sm">
-              <button onClick={() => handleDecrement(setReps, reps)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">-</button>
+              <button {...makeLongPress(setReps, () => reps, "dec")} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">-</button>
               <div className="flex items-baseline justify-center">
                 <input
                   id="reps-input"
@@ -970,7 +1008,7 @@ export default function GymTracker() {
                 />
                 <span className="text-xs font-bold text-gray-400 ml-1.5 uppercase tracking-wide">reps</span>
               </div>
-              <button onClick={() => handleIncrement(setReps, reps)} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">+</button>
+              <button {...makeLongPress(setReps, () => reps, "inc")} className="w-10 h-10 flex items-center justify-center text-3xl text-gray-400 active:bg-gray-100 rounded-lg transition-colors">+</button>
             </div>
           </div>
         </div>
