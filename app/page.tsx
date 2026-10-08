@@ -103,6 +103,44 @@ const EquipmentIcon = ({ eq, size = 14 }: { eq?: string; size?: number }) => {
   return <IconFreeWeight size={size} />;
 };
 
+// ─── DECIMAL INPUT ────────────────────────────────────────────────────────────
+
+// Accepts "62.5" and "62,5" — iPhones in comma-decimal regions only show a
+// comma on the number keypad.
+const parseDecimal = (text: string): number | "" => {
+  if (text === "") return "";
+  const n = Number(text.replace(",", "."));
+  return isNaN(n) ? "" : n;
+};
+
+// Keeps the raw text while typing (so "62," isn't wiped before the "5"),
+// and resyncs when the value changes from outside (e.g. the +/- buttons).
+const DecimalInput = ({
+  value,
+  onValueChange,
+  ...props
+}: { value: number | ""; onValueChange: (v: number | "") => void } &
+  Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type" | "inputMode">) => {
+  const [text, setText] = useState(String(value));
+  useEffect(() => {
+    if (parseDecimal(text) !== value) setText(String(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  return (
+    <input
+      {...props}
+      type="text"
+      inputMode="decimal"
+      value={text}
+      onChange={(e) => {
+        const t = e.target.value.replace(/[^0-9.,]/g, "");
+        setText(t);
+        onValueChange(parseDecimal(t));
+      }}
+    />
+  );
+};
+
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function GymTracker() {
@@ -131,7 +169,7 @@ export default function GymTracker() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [hiddenExercises, setHiddenExercises] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ date: "", weight: 0, sets: 0, reps: 0 });
+  const [editForm, setEditForm] = useState<{ date: string; weight: number | ""; sets: number; reps: number }>({ date: "", weight: 0, sets: 0, reps: 0 });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Ref used to scroll the heatmap into view when it opens
@@ -743,30 +781,41 @@ export default function GymTracker() {
                                     {(["weight", "sets", "reps"] as const).map((field, fi) => {
                                       const ids = ["weight", "sets", "reps"];
                                       const nextId = ids[fi + 1] ? `edit-${ids[fi + 1]}-${entry.id}` : null;
+                                      const shared = {
+                                        id: `edit-${field}-${entry.id}`,
+                                        enterKeyHint: (nextId ? "next" : "done") as "next" | "done",
+                                        onFocus: handleFocusSelect,
+                                        onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+                                          if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            if (nextId) {
+                                              document.getElementById(nextId)?.focus();
+                                            } else {
+                                              blurKeyboard();
+                                              setTimeout(() => saveEdit(entry.id), 10);
+                                            }
+                                          }
+                                        },
+                                        className: "w-full bg-transparent text-center font-bold text-gray-800 outline-none",
+                                      };
                                       return (
                                         <div key={field} className="flex-1 bg-gray-50 rounded-xl p-2 border border-gray-100">
                                           <p className="text-[9px] uppercase font-bold text-gray-400 text-center mb-1">{field}</p>
-                                          <input
-                                            id={`edit-${field}-${entry.id}`}
-                                            type="text"
-                                            inputMode={field === "weight" ? "decimal" : "numeric"}
-                                            enterKeyHint={nextId ? "next" : "done"}
-                                            value={editForm[field]}
-                                            onChange={(e) => setEditForm({ ...editForm, [field]: Number(e.target.value) })}
-                                            onFocus={handleFocusSelect}
-                                            onKeyDown={(e) => {
-                                              if (e.key === "Enter") {
-                                                e.preventDefault();
-                                                if (nextId) {
-                                                  document.getElementById(nextId)?.focus();
-                                                } else {
-                                                  blurKeyboard();
-                                                  setTimeout(() => saveEdit(entry.id), 10);
-                                                }
-                                              }
-                                            }}
-                                            className="w-full bg-transparent text-center font-bold text-gray-800 outline-none"
-                                          />
+                                          {field === "weight" ? (
+                                            <DecimalInput
+                                              {...shared}
+                                              value={editForm.weight}
+                                              onValueChange={(v) => setEditForm((f) => ({ ...f, weight: v }))}
+                                            />
+                                          ) : (
+                                            <input
+                                              {...shared}
+                                              type="text"
+                                              inputMode="numeric"
+                                              value={editForm[field]}
+                                              onChange={(e) => setEditForm({ ...editForm, [field]: Number(e.target.value) })}
+                                            />
+                                          )}
                                         </div>
                                       );
                                     })}
@@ -946,13 +995,11 @@ export default function GymTracker() {
           <div className="flex items-center justify-between bg-gray-50/50 border border-gray-200 rounded-2xl p-2 min-h-[60px]">
             <button {...makeLongPress(setWeight, () => weight, "dec")} className="w-14 h-12 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm text-3xl text-gray-400 active:bg-gray-50 transition-colors">-</button>
             <div className="flex items-baseline justify-center flex-1">
-              <input
+              <DecimalInput
                 id="weight-input"
-                type="number"
-                inputMode="decimal"
                 enterKeyHint="next"
                 value={weight}
-                onChange={(e) => setWeight(e.target.value === "" ? "" : Number(e.target.value))}
+                onValueChange={setWeight}
                 onFocus={handleFocusSelect}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") { e.preventDefault(); document.getElementById("sets-input")?.focus(); }
